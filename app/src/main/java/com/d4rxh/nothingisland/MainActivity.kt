@@ -448,28 +448,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun startIslandServiceSafely() {
         try {
-            val intent = Intent(this, IslandOverlayService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                try {
-                    startForegroundService(intent)
-                } catch (e: Exception) {
-                    Log.w("MainActivity", "startForegroundService failed, falling back to startService: ${e.message}")
-                    startService(intent)
-                }
-            } else {
-                startService(intent)
-            }
+            startService(Intent(this, IslandOverlayService::class.java))
         } catch (e: Exception) {
-            Log.e("MainActivity", "Safe startForegroundService caught: ${e.message}", e)
+            Log.e("MainActivity", "startService caught: ${e.message}", e)
         }
     }
 
     private fun stopIslandServiceSafely() {
         try {
-            val intent = Intent(this, IslandOverlayService::class.java)
-            stopService(intent)
+            stopService(Intent(this, IslandOverlayService::class.java))
         } catch (e: Exception) {
-            Log.e("MainActivity", "Safe stopService caught: ${e.message}", e)
+            Log.e("MainActivity", "stopService caught: ${e.message}", e)
         }
     }
 
@@ -483,8 +472,16 @@ class MainActivity : AppCompatActivity() {
         simEqualizer.visibility = View.VISIBLE
         simEqualizer.isPlaying = true
 
-        // Real screen overlay test
-        IslandOverlayService.instance?.onMediaStateChanged("Starboy", "The Weeknd", true, null)
+        // Real screen overlay test with Spotify branding
+        IslandOverlayService.instance?.onMediaStateChanged(
+            packageName = "com.spotify.music",
+            appName = "Spotify",
+            title = "Starboy",
+            artist = "The Weeknd",
+            isPlaying = true,
+            artwork = null,
+            appIcon = getDrawable(R.drawable.ic_music)
+        )
     }
 
     private fun simulateChargingIsland() {
@@ -510,7 +507,12 @@ class MainActivity : AppCompatActivity() {
         simRightText.visibility = View.VISIBLE
         simRightText.text = "Rahul: Kahan ho?"
 
-        // Real screen overlay test
-        IslandOverlayService.instance?.onNotificationReceived("WhatsApp", "Rahul", "Bhai call uthana urgent hai!")
+        // Real screen overlay test with WhatsApp branding
+        IslandOverlayService.instance?.onNotificationReceived(
+            appName = "WhatsApp",
+            title = "Rahul",
+            content = "Bhai call uthana urgent hai!",
+            appIcon = getDrawable(R.drawable.ic_bell)
+        )
     }
 }

@@ -2,11 +2,13 @@ package com.d4rxh.nothingisland.service
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.service.notification.NotificationListenerService
@@ -45,54 +47,111 @@ class IslandNotificationListener : NotificationListenerService() {
             val componentName = ComponentName(this, IslandNotificationListener::class.java)
             mediaSessionManager.addOnActiveSessionsChangedListener(activeSessionsListener, componentName)
             val controllers = mediaSessionManager.getActiveSessions(componentName)
-            updateMediaController(controllers.firstOrNull())
+            updateMediaController(controllers?.firstOrNull())
+
+            // Ensure overlay service is alive
+            startService(Intent(this, IslandOverlayService::class.java))
         } catch (e: Exception) {
-            Log.e("NotificationListener", "Failed to register active sessions listener", e)
+            Log.e("NotificationListener", "Failed in onListenerConnected: ${e.message}", e)
         }
     }
 
     private fun updateMediaController(controller: MediaController?) {
-        currentController?.unregisterCallback(callback)
-        currentController = controller
-        IslandMediaManager.setActiveController(controller)
+        try {
+            currentController?.unregisterCallback(callback)
+            currentController = controller
+            IslandMediaManager.setActiveController(controller)
 
-        if (controller != null) {
-            controller.registerCallback(callback)
-            dispatchMediaUpdate()
+            if (controller != null) {
+                controller.registerCallback(callback, mainHandler)
+                dispatchMediaUpdate()
+            }
+        } catch (e: Exception) {
+            Log.e("NotificationListener", "Error updating media controller: ${e.message}", e)
         }
     }
 
     private fun dispatchMediaUpdate() {
-        val controller = currentController ?: return
-        val metadata = controller.metadata
-        val state = controller.playbackState
+        try {
+            val controller = currentController ?: return
+            val metadata = controller.metadata
+            val state = controller.playbackState
 
-        val isPlaying = state?.state == PlaybackState.STATE_PLAYING
-        val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
-        val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
-        val artwork = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-            ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            val isPlaying = state?.state == PlaybackState.STATE_PLAYING
+            val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
+            val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
 
-        IslandOverlayService.instance?.onMediaStateChanged(title, artist, isPlaying, artwork)
+            // Safe artwork extraction
+            val rawArtwork: Bitmap? = try {
+                metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                    ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            } catch (e: Exception) {
+                null
+            }
+
+            // Extract App Logo & App Name (Spotify, YouTube Music, etc.)
+            val sourcePackage = controller.packageName ?: ""
+            val appIcon: Drawable? = try {
+                if (sourcePackage.isNotEmpty()) packageManager.getApplicationIcon(sourcePackage) else null
+            } catch (e: Exception) {
+                null
+            }
+
+            val appName = try {
+                if (sourcePackage.isNotEmpty()) {
+                    val appInfo = packageManager.getApplicationInfo(sourcePackage, 0)
+                    packageManager.getApplicationLabel(appInfo).toString()
+                } else {
+                    "NOW PLAYING"
+                }
+            } catch (e: Exception) {
+                "NOW PLAYING"
+            }
+
+            // Forward to Island Overlay
+            IslandOverlayService.instance?.onMediaStateChanged(
+                packageName = sourcePackage,
+                appName = appName,
+                title = title,
+                artist = artist,
+                isPlaying = isPlaying,
+                artwork = rawArtwork,
+                appIcon = appIcon
+            )
+        } catch (e: Exception) {
+            Log.e("NotificationListener", "Error in dispatchMediaUpdate: ${e.message}", e)
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
-        if (sbn == null || sbn.packageName == packageName) return
+        try {
+            if (sbn == null || sbn.packageName == packageName) return
 
-        val extras = sbn.notification.extras ?: return
-        val title = extras.getCharSequence("android.title")?.toString() ?: ""
-        val text = extras.getCharSequence("android.text")?.toString() ?: ""
+            val extras = sbn.notification.extras ?: return
+            val title = extras.getCharSequence("android.title")?.toString() ?: ""
+            val text = extras.getCharSequence("android.text")?.toString() ?: ""
 
-        if (title.isNotEmpty() && text.isNotEmpty() && !sbn.isOngoing) {
-            val appName = try {
-                val pm = packageManager
-                val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
-                pm.getApplicationLabel(appInfo).toString()
-            } catch (e: Exception) {
-                sbn.packageName
+            // Ignore ongoing media playback notifications to avoid conflict with MediaSession
+            if (title.isNotEmpty() && text.isNotEmpty() && !sbn.isOngoing) {
+                val appName = try {
+                    val pm = packageManager
+                    val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
+                    pm.getApplicationLabel(appInfo).toString()
+                } catch (e: Exception) {
+                    sbn.packageName
+                }
+
+                val appIcon: Drawable? = try {
+                    packageManager.getApplicationIcon(sbn.packageName)
+                } catch (e: Exception) {
+                    null
+                }
+
+                IslandOverlayService.instance?.onNotificationReceived(appName, title, text, appIcon)
             }
-            IslandOverlayService.instance?.onNotificationReceived(appName, title, text)
+        } catch (e: Exception) {
+            Log.e("NotificationListener", "Error in onNotificationPosted: ${e.message}", e)
         }
     }
 
@@ -102,7 +161,7 @@ class IslandNotificationListener : NotificationListenerService() {
             mediaSessionManager.removeOnActiveSessionsChangedListener(activeSessionsListener)
             currentController?.unregisterCallback(callback)
         } catch (e: Exception) {
-            Log.e("NotificationListener", "Error on destroy", e)
+            // Ignore
         }
     }
 }

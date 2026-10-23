@@ -1,17 +1,13 @@
 package com.d4rxh.nothingisland.service
 
 import android.annotation.SuppressLint
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -31,8 +27,6 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.core.app.NotificationCompat
-import com.d4rxh.nothingisland.MainActivity
 import com.d4rxh.nothingisland.R
 import com.d4rxh.nothingisland.data.IslandPreferences
 import com.d4rxh.nothingisland.helpers.NothingHapticHelper
@@ -84,7 +78,9 @@ class IslandOverlayService : Service() {
     private var isMusicPlaying = false
     private var currentTrackTitle = ""
     private var currentArtistName = ""
+    private var currentAppName = ""
     private var currentArtwork: Bitmap? = null
+    private var currentAppIcon: Drawable? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -94,7 +90,6 @@ class IslandOverlayService : Service() {
         prefs = IslandPreferences(this)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-        startForegroundNotificationSafely()
         initOverlay()
     }
 
@@ -103,53 +98,6 @@ class IslandOverlayService : Service() {
             initOverlay()
         }
         return START_STICKY
-    }
-
-    private fun startForegroundNotificationSafely() {
-        try {
-            val channelId = "nothing_island_service_channel"
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = NotificationChannel(
-                    channelId,
-                    "(NOT) Island Service",
-                    NotificationManager.IMPORTANCE_LOW
-                ).apply {
-                    description = "Dynamic punch-hole overlay service"
-                    setShowBadge(false)
-                }
-                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                nm.createNotificationChannel(channel)
-            }
-
-            val pendingIntent = PendingIntent.getActivity(
-                this,
-                0,
-                Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
-
-            val notification: Notification = NotificationCompat.Builder(this, channelId)
-                .setSmallIcon(R.drawable.ic_notification_island)
-                .setContentTitle("(NOT) ISLAND ACTIVE")
-                .setContentText("Dynamic punch-hole status overlay")
-                .setContentIntent(pendingIntent)
-                .setOngoing(true)
-                .setSilent(true)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .build()
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    1001,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                )
-            } else {
-                startForeground(1001, notification)
-            }
-        } catch (e: Exception) {
-            Log.e("IslandService", "Could not start foreground notification: ${e.message}", e)
-        }
     }
 
     private fun initOverlay() {
@@ -168,7 +116,7 @@ class IslandOverlayService : Service() {
     @SuppressLint("InflateParams", "ClickableViewAccessibility")
     private fun createOverlayView() {
         try {
-            // Clean up any existing view first
+            // Clean up old view if any exists
             if (overlayView != null) {
                 try {
                     if (overlayView?.isAttachedToWindow == true) {
@@ -323,43 +271,81 @@ class IslandOverlayService : Service() {
         applyCustomStyling()
     }
 
-    fun onMediaStateChanged(title: String, artist: String, isPlaying: Boolean, artwork: Bitmap?) {
+    // Handles any media app: Spotify, YouTube Music, Apple Music, JioSaavn, SoundCloud, etc.
+    fun onMediaStateChanged(
+        packageName: String,
+        appName: String,
+        title: String,
+        artist: String,
+        isPlaying: Boolean,
+        artwork: Bitmap?,
+        appIcon: Drawable?
+    ) {
         if (!prefs.musicIslandEnabled) return
 
         currentTrackTitle = title
         currentArtistName = artist
+        currentAppName = appName
         isMusicPlaying = isPlaying
         currentArtwork = artwork
+        currentAppIcon = appIcon
 
         mainHandler.post {
-            if (title.isNotEmpty() && isPlaying) {
-                compactLeftIcon.setImageResource(R.drawable.ic_music)
-                compactEqualizer.isPlaying = true
+            try {
+                if (title.isNotEmpty() && isPlaying) {
+                    // 1. Compact Island:
+                    // Left of punch hole: Show real Album Artwork if available; otherwise show Spotify/app's real Logo!
+                    if (artwork != null) {
+                        compactLeftIcon.setImageBitmap(artwork)
+                    } else if (appIcon != null) {
+                        compactLeftIcon.setImageDrawable(appIcon)
+                    } else {
+                        compactLeftIcon.setImageResource(R.drawable.ic_music)
+                    }
+                    compactLeftIcon.visibility = View.VISIBLE
+                    compactLeftText.visibility = View.GONE
 
-                expandedTitleText.text = title
-                expandedArtistText.text = artist
-                expandedSourceAppText.text = "NOW PLAYING"
-                expandedAppIcon.setImageResource(R.drawable.ic_music)
-                btnPlayPause.setImageResource(R.drawable.ic_pause)
-                expandedEqualizer.isPlaying = true
+                    // Right of punch hole: Dancing Nothing Red 4-column dot equalizer!
+                    compactRightText.visibility = View.GONE
+                    compactEqualizer.visibility = View.VISIBLE
+                    compactEqualizer.isPlaying = true
 
-                if (artwork != null) {
-                    compactLeftIcon.setImageBitmap(artwork)
-                    expandedArtwork.setImageBitmap(artwork)
-                    expandedArtwork.visibility = View.VISIBLE
-                } else {
-                    compactLeftIcon.setImageResource(R.drawable.ic_music)
-                    expandedArtwork.visibility = View.GONE
+                    // 2. Expanded Card View:
+                    if (appIcon != null) {
+                        expandedAppIcon.setImageDrawable(appIcon)
+                    } else {
+                        expandedAppIcon.setImageResource(R.drawable.ic_music)
+                    }
+                    expandedSourceAppText.text = appName.uppercase()
+
+                    if (artwork != null) {
+                        expandedArtwork.setImageBitmap(artwork)
+                        expandedArtwork.visibility = View.VISIBLE
+                    } else if (appIcon != null) {
+                        expandedArtwork.setImageDrawable(appIcon)
+                        expandedArtwork.visibility = View.VISIBLE
+                    } else {
+                        expandedArtwork.visibility = View.GONE
+                    }
+
+                    expandedTitleText.text = title
+                    expandedArtistText.text = artist
+                    mediaControlsRow.visibility = View.VISIBLE
+                    expandedNotificationBody.visibility = View.GONE
+                    btnPlayPause.setImageResource(R.drawable.ic_pause)
+                    expandedEqualizer.isPlaying = true
+
+                    if (currentState != State.EXPANDED) {
+                        updateState(State.MUSIC_COMPACT)
+                    }
+                } else if (!isPlaying && currentState == State.MUSIC_COMPACT) {
+                    compactEqualizer.isPlaying = false
+                    expandedEqualizer.isPlaying = false
+                    btnPlayPause.setImageResource(R.drawable.ic_play)
+                    updateState(State.IDLE)
                 }
-
-                if (currentState != State.EXPANDED) {
-                    updateState(State.MUSIC_COMPACT)
-                }
-            } else if (!isPlaying && currentState == State.MUSIC_COMPACT) {
-                compactEqualizer.isPlaying = false
-                expandedEqualizer.isPlaying = false
-                btnPlayPause.setImageResource(R.drawable.ic_play)
-                updateState(State.IDLE)
+            } catch (e: Exception) {
+                Log.e("IslandService", "Error in onMediaStateChanged UI update: ${e.message}", e)
             }
         }
     }
@@ -368,20 +354,35 @@ class IslandOverlayService : Service() {
         if (!prefs.chargingIslandEnabled) return
 
         mainHandler.post {
-            if (isCharging) {
-                compactLeftIcon.setImageResource(R.drawable.ic_bolt)
-                compactRightText.text = "$batteryPercent%"
-                compactLeftText.text = "CHARGING"
+            try {
+                if (isCharging) {
+                    compactLeftIcon.setImageResource(R.drawable.ic_bolt)
+                    compactLeftIcon.visibility = View.VISIBLE
+                    compactLeftText.text = "CHARGE"
+                    compactLeftText.visibility = View.VISIBLE
+                    compactRightText.text = "$batteryPercent%"
+                    compactRightText.visibility = View.VISIBLE
+                    compactEqualizer.visibility = View.GONE
 
-                expandedTitleText.text = "NOTHING FAST CHARGE"
-                expandedArtistText.text = "Battery level at $batteryPercent%"
-                expandedSourceAppText.text = "GLYPH CHARGING"
-                expandedAppIcon.setImageResource(R.drawable.ic_bolt)
-                mediaControlsRow.visibility = View.GONE
+                    expandedTitleText.text = "NOTHING FAST CHARGE"
+                    expandedArtistText.text = "Battery level at $batteryPercent%"
+                    expandedSourceAppText.text = "GLYPH CHARGING"
+                    expandedAppIcon.setImageResource(R.drawable.ic_bolt)
+                    expandedArtwork.visibility = View.GONE
+                    mediaControlsRow.visibility = View.GONE
 
-                updateState(State.CHARGING_COMPACT)
+                    updateState(State.CHARGING_COMPACT)
 
-                mainHandler.postDelayed({
+                    mainHandler.postDelayed({
+                        if (currentState == State.CHARGING_COMPACT) {
+                            if (isMusicPlaying) {
+                                updateState(State.MUSIC_COMPACT)
+                            } else {
+                                updateState(State.IDLE)
+                            }
+                        }
+                    }, 5000)
+                } else {
                     if (currentState == State.CHARGING_COMPACT) {
                         if (isMusicPlaying) {
                             updateState(State.MUSIC_COMPACT)
@@ -389,120 +390,152 @@ class IslandOverlayService : Service() {
                             updateState(State.IDLE)
                         }
                     }
-                }, 5000)
-            } else {
-                if (currentState == State.CHARGING_COMPACT) {
-                    if (isMusicPlaying) {
-                        updateState(State.MUSIC_COMPACT)
-                    } else {
-                        updateState(State.IDLE)
-                    }
                 }
+            } catch (e: Exception) {
+                Log.e("IslandService", "Error in onChargingChanged: ${e.message}", e)
             }
         }
     }
 
-    fun onNotificationReceived(appName: String, title: String, content: String) {
+    // Handles ANY notification: WhatsApp, Telegram, Instagram, Messages, Calls, Gmail, etc.
+    fun onNotificationReceived(
+        appName: String,
+        title: String,
+        content: String,
+        appIcon: Drawable?
+    ) {
         if (!prefs.notificationIslandEnabled) return
 
         mainHandler.post {
-            compactLeftIcon.setImageResource(R.drawable.ic_bell)
-            compactRightText.text = title
-
-            expandedSourceAppText.text = appName.uppercase()
-            expandedTitleText.text = title
-            expandedArtistText.text = content
-            expandedNotificationBody.text = content
-            expandedNotificationBody.visibility = View.VISIBLE
-            mediaControlsRow.visibility = View.GONE
-            expandedAppIcon.setImageResource(R.drawable.ic_bell)
-
-            updateState(State.NOTIFICATION_COMPACT)
-
-            mainHandler.postDelayed({
-                if (currentState == State.NOTIFICATION_COMPACT) {
-                    if (isMusicPlaying) {
-                        updateState(State.MUSIC_COMPACT)
-                    } else {
-                        updateState(State.IDLE)
-                    }
+            try {
+                // Compact Island shows the real App Logo on left (WhatsApp green logo, Telegram, etc.)
+                if (appIcon != null) {
+                    compactLeftIcon.setImageDrawable(appIcon)
+                } else {
+                    compactLeftIcon.setImageResource(R.drawable.ic_bell)
                 }
-            }, 4500)
+                compactLeftIcon.visibility = View.VISIBLE
+                compactLeftText.visibility = View.GONE
+
+                // Right shows sender name / title
+                compactRightText.text = title
+                compactRightText.visibility = View.VISIBLE
+                compactEqualizer.visibility = View.GONE
+
+                // Expanded Card shows full message preview
+                if (appIcon != null) {
+                    expandedAppIcon.setImageDrawable(appIcon)
+                    expandedArtwork.setImageDrawable(appIcon)
+                    expandedArtwork.visibility = View.VISIBLE
+                } else {
+                    expandedAppIcon.setImageResource(R.drawable.ic_bell)
+                    expandedArtwork.visibility = View.GONE
+                }
+
+                expandedSourceAppText.text = appName.uppercase()
+                expandedTitleText.text = title
+                expandedArtistText.text = content
+                expandedNotificationBody.text = content
+                expandedNotificationBody.visibility = View.VISIBLE
+                mediaControlsRow.visibility = View.GONE
+                expandedEqualizer.visibility = View.GONE
+
+                updateState(State.NOTIFICATION_COMPACT)
+
+                mainHandler.postDelayed({
+                    if (currentState == State.NOTIFICATION_COMPACT) {
+                        if (isMusicPlaying) {
+                            updateState(State.MUSIC_COMPACT)
+                        } else {
+                            updateState(State.IDLE)
+                        }
+                    }
+                }, 4500)
+            } catch (e: Exception) {
+                Log.e("IslandService", "Error in onNotificationReceived: ${e.message}", e)
+            }
         }
     }
 
     private fun updateState(newState: State) {
         currentState = newState
 
-        val view = overlayView
-        if (view != null && view.isAttachedToWindow) {
-            try {
-                TransitionManager.beginDelayedTransition(
-                    islandCapsule as ViewGroup,
-                    ChangeBounds().apply {
-                        duration = 240
-                        interpolator = OvershootInterpolator(0.8f)
-                    }
-                )
-            } catch (e: Exception) {
-                Log.w("IslandService", "Transition failed, applying directly: ${e.message}")
+        try {
+            val view = overlayView
+            if (view != null && view.isAttachedToWindow) {
+                try {
+                    TransitionManager.beginDelayedTransition(
+                        islandCapsule as ViewGroup,
+                        ChangeBounds().apply {
+                            duration = 200
+                            interpolator = OvershootInterpolator(0.8f)
+                        }
+                    )
+                } catch (e: Exception) {
+                    Log.w("IslandService", "Transition failed, applying directly: ${e.message}")
+                }
             }
+            applyStateVisibilities(newState)
+        } catch (e: Exception) {
+            Log.e("IslandService", "Error in updateState: ${e.message}", e)
         }
-
-        applyStateVisibilities(newState)
     }
 
     private fun applyStateVisibilities(state: State) {
-        when (state) {
-            State.IDLE -> {
-                compactContainer.visibility = View.VISIBLE
-                expandedContainer.visibility = View.GONE
+        try {
+            when (state) {
+                State.IDLE -> {
+                    compactContainer.visibility = View.VISIBLE
+                    expandedContainer.visibility = View.GONE
 
-                // Make Standby visibly recognizable around punch-hole:
-                // Left: iconic Nothing Red dot
-                compactLeftIcon.setImageResource(R.drawable.ic_dot)
-                compactLeftIcon.visibility = View.VISIBLE
+                    // Visible Standby Island:
+                    // Left: Iconic Nothing Red status dot
+                    compactLeftIcon.setImageResource(R.drawable.ic_dot)
+                    compactLeftIcon.visibility = View.VISIBLE
+                    compactLeftText.visibility = View.GONE
 
-                compactLeftText.visibility = View.GONE
-
-                // Right: Nothing label in NDot57 typography
-                compactRightText.text = "NOTHING"
-                compactRightText.visibility = View.VISIBLE
-                compactEqualizer.visibility = View.GONE
-            }
-            State.MUSIC_COMPACT -> {
-                compactContainer.visibility = View.VISIBLE
-                expandedContainer.visibility = View.GONE
-                compactLeftIcon.visibility = View.VISIBLE
-                compactLeftText.visibility = View.GONE
-                compactRightText.visibility = View.GONE
-                compactEqualizer.visibility = View.VISIBLE
-            }
-            State.CHARGING_COMPACT -> {
-                compactContainer.visibility = View.VISIBLE
-                expandedContainer.visibility = View.GONE
-                compactLeftIcon.visibility = View.VISIBLE
-                compactLeftText.visibility = View.VISIBLE
-                compactLeftText.text = "CHARGE"
-                compactRightText.visibility = View.VISIBLE
-                compactEqualizer.visibility = View.GONE
-            }
-            State.NOTIFICATION_COMPACT -> {
-                compactContainer.visibility = View.VISIBLE
-                expandedContainer.visibility = View.GONE
-                compactLeftIcon.visibility = View.VISIBLE
-                compactLeftText.visibility = View.GONE
-                compactRightText.visibility = View.VISIBLE
-                compactEqualizer.visibility = View.GONE
-            }
-            State.EXPANDED -> {
-                compactContainer.visibility = View.GONE
-                expandedContainer.visibility = View.VISIBLE
-                if (isMusicPlaying) {
-                    mediaControlsRow.visibility = View.VISIBLE
-                    expandedNotificationBody.visibility = View.GONE
+                    // Right: NOTHING in NDot57 dot-matrix typography
+                    compactRightText.text = "NOTHING"
+                    compactRightText.visibility = View.VISIBLE
+                    compactEqualizer.visibility = View.GONE
+                }
+                State.MUSIC_COMPACT -> {
+                    compactContainer.visibility = View.VISIBLE
+                    expandedContainer.visibility = View.GONE
+                    compactLeftIcon.visibility = View.VISIBLE
+                    compactLeftText.visibility = View.GONE
+                    compactRightText.visibility = View.GONE
+                    compactEqualizer.visibility = View.VISIBLE
+                }
+                State.CHARGING_COMPACT -> {
+                    compactContainer.visibility = View.VISIBLE
+                    expandedContainer.visibility = View.GONE
+                    compactLeftIcon.setImageResource(R.drawable.ic_bolt)
+                    compactLeftIcon.visibility = View.VISIBLE
+                    compactLeftText.visibility = View.VISIBLE
+                    compactLeftText.text = "CHARGE"
+                    compactRightText.visibility = View.VISIBLE
+                    compactEqualizer.visibility = View.GONE
+                }
+                State.NOTIFICATION_COMPACT -> {
+                    compactContainer.visibility = View.VISIBLE
+                    expandedContainer.visibility = View.GONE
+                    compactLeftIcon.visibility = View.VISIBLE
+                    compactLeftText.visibility = View.GONE
+                    compactRightText.visibility = View.VISIBLE
+                    compactEqualizer.visibility = View.GONE
+                }
+                State.EXPANDED -> {
+                    compactContainer.visibility = View.GONE
+                    expandedContainer.visibility = View.VISIBLE
+                    if (isMusicPlaying) {
+                        mediaControlsRow.visibility = View.VISIBLE
+                        expandedNotificationBody.visibility = View.GONE
+                    }
                 }
             }
+        } catch (e: Exception) {
+            Log.e("IslandService", "Error in applyStateVisibilities: ${e.message}", e)
         }
     }
 

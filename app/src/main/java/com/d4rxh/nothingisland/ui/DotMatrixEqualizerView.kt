@@ -28,13 +28,15 @@ class DotMatrixEqualizerView @JvmOverloads constructor(
 
     var isPlaying: Boolean = false
         set(value) {
-            field = value
-            if (value) {
-                startAnimation()
-            } else {
-                stopAnimation()
+            if (field != value) {
+                field = value
+                if (value) {
+                    startAnimation()
+                } else {
+                    stopAnimation()
+                }
+                postInvalidateOnAnimation()
             }
-            invalidate()
         }
 
     private var animator: ValueAnimator? = null
@@ -55,7 +57,7 @@ class DotMatrixEqualizerView @JvmOverloads constructor(
                         }
                         columnHeights[i] += (targetHeights[i] - columnHeights[i]) * 0.35f
                     }
-                    invalidate()
+                    postInvalidateOnAnimation()
                 }
             }
             start()
@@ -68,36 +70,38 @@ class DotMatrixEqualizerView @JvmOverloads constructor(
         for (i in columnHeights.indices) {
             columnHeights[i] = 0.2f
         }
-        invalidate()
+        postInvalidateOnAnimation()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val w = width.toFloat()
-        val h = height.toFloat()
-        if (w <= 0 || h <= 0) return
+        try {
+            val w = width.toFloat()
+            val h = height.toFloat()
+            if (w <= 0 || h <= 0) return
 
-        val cols = 4
-        val rows = 5
-        val dotRadius = Math.min(w / (cols * 2.5f), h / (rows * 2.5f)).coerceIn(2f, 5f)
-        val spacingX = w / cols
-        val spacingY = h / rows
+            val cols = 4
+            val rows = 5
+            val dotRadius = Math.min(w / (cols * 2.5f), h / (rows * 2.5f)).coerceIn(2f, 5f)
+            val spacingX = w / cols
+            val spacingY = h / rows
 
-        for (c in 0 until cols) {
-            val cx = spacingX * c + (spacingX / 2f)
-            val litDotsCount = if (isPlaying) {
-                (columnHeights[c] * rows).toInt().coerceIn(1, rows)
-            } else {
-                1
+            for (c in 0 until cols) {
+                val cx = spacingX * c + (spacingX / 2f)
+                val litDotsCount = if (isPlaying) {
+                    (columnHeights[c] * rows).toInt().coerceIn(1, rows)
+                } else {
+                    1
+                }
+
+                for (r in 0 until rows) {
+                    val cy = h - (spacingY * r + (spacingY / 2f))
+                    val isLit = r < litDotsCount
+                    canvas.drawCircle(cx, cy, dotRadius, if (isLit) dotPaint else inactivePaint)
+                }
             }
-
-            for (r in 0 until rows) {
-                // Bottom to top
-                val cy = h - (spacingY * r + (spacingY / 2f))
-                val isLit = r < litDotsCount
-
-                canvas.drawCircle(cx, cy, dotRadius, if (isLit) dotPaint else inactivePaint)
-            }
+        } catch (e: Exception) {
+            // Ignore rendering exceptions
         }
     }
 
