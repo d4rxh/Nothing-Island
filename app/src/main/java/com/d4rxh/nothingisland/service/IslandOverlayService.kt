@@ -1,6 +1,5 @@
 package com.d4rxh.nothingisland.service
 
-import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -24,7 +23,6 @@ import android.transition.TransitionManager
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -81,7 +79,6 @@ class IslandOverlayService : Service() {
     }
 
     private var currentState: State = State.IDLE
-    private var previousState: State = State.IDLE
 
     // Media state cache
     private var isMusicPlaying = false
@@ -133,22 +130,20 @@ class IslandOverlayService : Service() {
 
             val notification: Notification = NotificationCompat.Builder(this, channelId)
                 .setSmallIcon(R.drawable.ic_notification_island)
-                .setContentTitle("(NOT) ISLAND")
-                .setContentText("Dynamic punch-hole active")
+                .setContentTitle("(NOT) ISLAND ACTIVE")
+                .setContentText("Dynamic punch-hole status overlay")
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setSilent(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build()
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                try {
-                    startForeground(1001, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-                } catch (e: Exception) {
-                    startForeground(1001, notification)
-                }
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(1001, notification, 0)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    1001,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                )
             } else {
                 startForeground(1001, notification)
             }
@@ -159,7 +154,7 @@ class IslandOverlayService : Service() {
 
     private fun initOverlay() {
         if (!Settings.canDrawOverlays(this)) {
-            Log.w("IslandService", "Overlay permission not granted; delaying overlay creation")
+            Log.w("IslandService", "Overlay permission not granted; cannot create overlay view")
             return
         }
 
@@ -172,82 +167,79 @@ class IslandOverlayService : Service() {
 
     @SuppressLint("InflateParams", "ClickableViewAccessibility")
     private fun createOverlayView() {
-        // Clean up any existing view first
-        if (overlayView != null) {
-            try {
-                if (overlayView?.isAttachedToWindow == true) {
-                    windowManager.removeViewImmediate(overlayView)
-                }
-            } catch (e: Exception) {
-                Log.w("IslandService", "Old overlay cleanup error: ${e.message}")
-            }
-            overlayView = null
-        }
-
-        val view = LayoutInflater.from(this).inflate(R.layout.layout_island_overlay, null)
-        overlayView = view
-
-        islandCapsule = view.findViewById(R.id.islandCapsule)
-        compactContainer = view.findViewById(R.id.compactContainer)
-        compactLeftIcon = view.findViewById(R.id.compactLeftIcon)
-        compactLeftText = view.findViewById(R.id.compactLeftText)
-        centerCutoutSpacer = view.findViewById(R.id.centerCutoutSpacer)
-        compactRightText = view.findViewById(R.id.compactRightText)
-        compactEqualizer = view.findViewById(R.id.compactEqualizer)
-
-        expandedContainer = view.findViewById(R.id.expandedContainer)
-        expandedAppIcon = view.findViewById(R.id.expandedAppIcon)
-        expandedSourceAppText = view.findViewById(R.id.expandedSourceAppText)
-        expandedArtwork = view.findViewById(R.id.expandedArtwork)
-        expandedTitleText = view.findViewById(R.id.expandedTitleText)
-        expandedArtistText = view.findViewById(R.id.expandedArtistText)
-        expandedEqualizer = view.findViewById(R.id.expandedEqualizer)
-        mediaControlsRow = view.findViewById(R.id.mediaControlsRow)
-        btnPrev = view.findViewById(R.id.btnPrev)
-        btnPlayPause = view.findViewById(R.id.btnPlayPause)
-        btnNext = view.findViewById(R.id.btnNext)
-        expandedNotificationBody = view.findViewById(R.id.expandedNotificationBody)
-
-        TypefaceHelper.applyNdot(
-            compactLeftText,
-            compactRightText,
-            expandedSourceAppText,
-            expandedTitleText
-        )
-
-        applyCustomStyling()
-        setupInteractions()
-
-        val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-
-        layoutParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            layoutFlag,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            x = dpToPx(prefs.xOffset)
-            y = dpToPx(prefs.yOffset)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            }
-        }
-
         try {
+            // Clean up any existing view first
+            if (overlayView != null) {
+                try {
+                    if (overlayView?.isAttachedToWindow == true) {
+                        windowManager.removeViewImmediate(overlayView)
+                    }
+                } catch (e: Exception) {
+                    Log.w("IslandService", "Old overlay cleanup error: ${e.message}")
+                }
+                overlayView = null
+            }
+
+            val view = LayoutInflater.from(this).inflate(R.layout.layout_island_overlay, null)
+            overlayView = view
+
+            islandCapsule = view.findViewById(R.id.islandCapsule)
+            compactContainer = view.findViewById(R.id.compactContainer)
+            compactLeftIcon = view.findViewById(R.id.compactLeftIcon)
+            compactLeftText = view.findViewById(R.id.compactLeftText)
+            centerCutoutSpacer = view.findViewById(R.id.centerCutoutSpacer)
+            compactRightText = view.findViewById(R.id.compactRightText)
+            compactEqualizer = view.findViewById(R.id.compactEqualizer)
+
+            expandedContainer = view.findViewById(R.id.expandedContainer)
+            expandedAppIcon = view.findViewById(R.id.expandedAppIcon)
+            expandedSourceAppText = view.findViewById(R.id.expandedSourceAppText)
+            expandedArtwork = view.findViewById(R.id.expandedArtwork)
+            expandedTitleText = view.findViewById(R.id.expandedTitleText)
+            expandedArtistText = view.findViewById(R.id.expandedArtistText)
+            expandedEqualizer = view.findViewById(R.id.expandedEqualizer)
+            mediaControlsRow = view.findViewById(R.id.mediaControlsRow)
+            btnPrev = view.findViewById(R.id.btnPrev)
+            btnPlayPause = view.findViewById(R.id.btnPlayPause)
+            btnNext = view.findViewById(R.id.btnNext)
+            expandedNotificationBody = view.findViewById(R.id.expandedNotificationBody)
+
+            TypefaceHelper.applyNdot(
+                compactLeftText,
+                compactRightText,
+                expandedSourceAppText,
+                expandedTitleText
+            )
+
+            applyCustomStyling()
+            setupInteractions()
+
+            val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            }
+
+            layoutParams = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                layoutFlag,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                x = dpToPx(prefs.xOffset)
+                y = dpToPx(prefs.yOffset)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    layoutInDisplayCutoutMode =
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+            }
+
             windowManager.addView(view, layoutParams)
-            // Initial layout without animation
             applyStateVisibilities(State.IDLE)
         } catch (e: Exception) {
             Log.e("IslandService", "Could not add overlay view to WindowManager", e)
@@ -255,26 +247,27 @@ class IslandOverlayService : Service() {
     }
 
     private fun applyCustomStyling() {
-        // Dynamic capsule background with user-defined corner radius
-        val radiusPx = dpToPx(prefs.cornerRadius).toFloat()
-        val bgDrawable = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            setColor(Color.BLACK)
-            setStroke(dpToPx(1.2f), Color.parseColor("#262626"))
-            cornerRadius = radiusPx
-        }
-        islandCapsule.background = bgDrawable
+        try {
+            val radiusPx = dpToPx(prefs.cornerRadius).toFloat()
+            val bgDrawable = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(Color.BLACK)
+                setStroke(dpToPx(1.2f), Color.parseColor("#333333"))
+                cornerRadius = radiusPx
+            }
+            islandCapsule.background = bgDrawable
 
-        // Dynamic height & min-width
-        compactContainer.layoutParams = compactContainer.layoutParams.apply {
-            height = dpToPx(prefs.islandHeight)
-        }
-        islandCapsule.minimumWidth = dpToPx(prefs.islandWidth)
+            compactContainer.layoutParams = compactContainer.layoutParams.apply {
+                height = dpToPx(prefs.islandHeight)
+            }
+            islandCapsule.minimumWidth = dpToPx(prefs.islandWidth)
 
-        // Center cutout spacer
-        centerCutoutSpacer.layoutParams = centerCutoutSpacer.layoutParams.apply {
-            width = dpToPx(prefs.cutoutSize)
-            height = dpToPx(prefs.cutoutSize)
+            centerCutoutSpacer.layoutParams = centerCutoutSpacer.layoutParams.apply {
+                width = dpToPx(prefs.cutoutSize)
+                height = dpToPx(prefs.cutoutSize)
+            }
+        } catch (e: Exception) {
+            Log.e("IslandService", "Error in applyCustomStyling: ${e.message}")
         }
     }
 
@@ -285,7 +278,7 @@ class IslandOverlayService : Service() {
             }
             if (currentState == State.EXPANDED) {
                 collapseIsland()
-            } else if (currentState != State.IDLE) {
+            } else {
                 expandIsland()
             }
         }
@@ -343,7 +336,6 @@ class IslandOverlayService : Service() {
                 compactLeftIcon.setImageResource(R.drawable.ic_music)
                 compactEqualizer.isPlaying = true
 
-                // Update expanded view
                 expandedTitleText.text = title
                 expandedArtistText.text = artist
                 expandedSourceAppText.text = "NOW PLAYING"
@@ -389,7 +381,6 @@ class IslandOverlayService : Service() {
 
                 updateState(State.CHARGING_COMPACT)
 
-                // Auto collapse to IDLE after 5 seconds if not music
                 mainHandler.postDelayed({
                     if (currentState == State.CHARGING_COMPACT) {
                         if (isMusicPlaying) {
@@ -428,7 +419,6 @@ class IslandOverlayService : Service() {
 
             updateState(State.NOTIFICATION_COMPACT)
 
-            // Auto dismiss notification pill after 4.5s
             mainHandler.postDelayed({
                 if (currentState == State.NOTIFICATION_COMPACT) {
                     if (isMusicPlaying) {
@@ -442,7 +432,6 @@ class IslandOverlayService : Service() {
     }
 
     private fun updateState(newState: State) {
-        previousState = currentState
         currentState = newState
 
         val view = overlayView
@@ -468,9 +457,17 @@ class IslandOverlayService : Service() {
             State.IDLE -> {
                 compactContainer.visibility = View.VISIBLE
                 expandedContainer.visibility = View.GONE
-                compactLeftIcon.visibility = View.GONE
+
+                // Make Standby visibly recognizable around punch-hole:
+                // Left: iconic Nothing Red dot
+                compactLeftIcon.setImageResource(R.drawable.ic_dot)
+                compactLeftIcon.visibility = View.VISIBLE
+
                 compactLeftText.visibility = View.GONE
-                compactRightText.visibility = View.GONE
+
+                // Right: Nothing label in NDot57 typography
+                compactRightText.text = "NOTHING"
+                compactRightText.visibility = View.VISIBLE
                 compactEqualizer.visibility = View.GONE
             }
             State.MUSIC_COMPACT -> {
@@ -486,7 +483,7 @@ class IslandOverlayService : Service() {
                 expandedContainer.visibility = View.GONE
                 compactLeftIcon.visibility = View.VISIBLE
                 compactLeftText.visibility = View.VISIBLE
-                compactLeftText.text = "CHARGING"
+                compactLeftText.text = "CHARGE"
                 compactRightText.visibility = View.VISIBLE
                 compactEqualizer.visibility = View.GONE
             }

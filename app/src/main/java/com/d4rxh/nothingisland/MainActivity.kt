@@ -87,6 +87,12 @@ class MainActivity : AppCompatActivity() {
         setupListeners()
         loadPreferences()
         updateSimulatedIslandAppearance()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
     }
 
     override fun onResume() {
@@ -354,6 +360,13 @@ class MainActivity : AppCompatActivity() {
             width = (prefs.cutoutSize * density).toInt()
             height = (prefs.cutoutSize * density).toInt()
         }
+
+        if (islandStateBadge.text == "LIVE PREVIEW") {
+            simLeftIcon.setImageResource(R.drawable.ic_dot)
+            simLeftIcon.visibility = View.VISIBLE
+            simRightText.text = "NOTHING"
+            simRightText.visibility = View.VISIBLE
+        }
     }
 
     private fun loadPreferences() {
@@ -437,7 +450,12 @@ class MainActivity : AppCompatActivity() {
         try {
             val intent = Intent(this, IslandOverlayService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
+                try {
+                    startForegroundService(intent)
+                } catch (e: Exception) {
+                    Log.w("MainActivity", "startForegroundService failed, falling back to startService: ${e.message}")
+                    startService(intent)
+                }
             } else {
                 startService(intent)
             }

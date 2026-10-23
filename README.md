@@ -78,7 +78,7 @@ Unlike generic iOS Dynamic Island clones, **(NOT) ISLAND** embraces the iconic *
 
 Download the signed release APK directly from GitHub Releases:
 
-👉 **[Download Nothing-Island-v1.0.1.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.1/Nothing-Island-v1.0.1.apk)**
+👉 **[Download Nothing-Island-v1.0.2.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.2/Nothing-Island-v1.0.2.apk)**
 
 ---
 
