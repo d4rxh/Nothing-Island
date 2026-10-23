@@ -1,15 +1,14 @@
 package com.d4rxh.nothingisland
 
-import android.animation.ValueAnimator
-import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.view.View
-import android.view.animation.OvershootInterpolator
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -29,14 +28,17 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var prefs: IslandPreferences
 
-    // UI References
+    // Header UI
     private lateinit var appTitleText: TextView
+    private lateinit var headerStatusText: TextView
     private lateinit var switchMasterIsland: MaterialSwitch
-    private lateinit var islandStateBadge: TextView
 
     // Simulator
+    private lateinit var sectionPreviewTitle: TextView
+    private lateinit var islandStateBadge: TextView
     private lateinit var simulatedIsland: LinearLayout
     private lateinit var simLeftIcon: ImageView
+    private lateinit var simLeftText: TextView
     private lateinit var simSpacer: View
     private lateinit var simEqualizer: DotMatrixEqualizerView
     private lateinit var simRightText: TextView
@@ -50,18 +52,29 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cardNotificationPermission: LinearLayout
     private lateinit var badgeNotificationPermission: TextView
 
-    // Calibration
+    // Presets & Calibration Sliders
+    private lateinit var btnResetDefaults: Button
     private lateinit var btnPresetPhone2: Button
     private lateinit var btnPresetPhone1: Button
+
+    private lateinit var sliderXOffset: Slider
+    private lateinit var textXOffsetValue: TextView
     private lateinit var sliderYOffset: Slider
     private lateinit var textYOffsetValue: TextView
     private lateinit var sliderWidth: Slider
     private lateinit var textWidthValue: TextView
+    private lateinit var sliderHeight: Slider
+    private lateinit var textHeightValue: TextView
+    private lateinit var sliderRadius: Slider
+    private lateinit var textRadiusValue: TextView
+    private lateinit var sliderCutout: Slider
+    private lateinit var textCutoutValue: TextView
 
     // Feature switches
     private lateinit var switchMusicIsland: MaterialSwitch
     private lateinit var switchChargingIsland: MaterialSwitch
     private lateinit var switchNotificationIsland: MaterialSwitch
+    private lateinit var switchHaptics: MaterialSwitch
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,23 +86,27 @@ class MainActivity : AppCompatActivity() {
         setupTypography()
         setupListeners()
         loadPreferences()
+        updateSimulatedIslandAppearance()
     }
 
     override fun onResume() {
         super.onResume()
         updatePermissionBadges()
         if (prefs.isEnabled && Settings.canDrawOverlays(this)) {
-            startIslandService()
+            startIslandServiceSafely()
         }
     }
 
     private fun initViews() {
         appTitleText = findViewById(R.id.appTitleText)
+        headerStatusText = findViewById(R.id.headerStatusText)
         switchMasterIsland = findViewById(R.id.switchMasterIsland)
-        islandStateBadge = findViewById(R.id.islandStateBadge)
 
+        sectionPreviewTitle = findViewById(R.id.sectionPreviewTitle)
+        islandStateBadge = findViewById(R.id.islandStateBadge)
         simulatedIsland = findViewById(R.id.simulatedIsland)
         simLeftIcon = findViewById(R.id.simLeftIcon)
+        simLeftText = findViewById(R.id.simLeftText)
         simSpacer = findViewById(R.id.simSpacer)
         simEqualizer = findViewById(R.id.simEqualizer)
         simRightText = findViewById(R.id.simRightText)
@@ -102,187 +119,353 @@ class MainActivity : AppCompatActivity() {
         cardNotificationPermission = findViewById(R.id.cardNotificationPermission)
         badgeNotificationPermission = findViewById(R.id.badgeNotificationPermission)
 
+        btnResetDefaults = findViewById(R.id.btnResetDefaults)
         btnPresetPhone2 = findViewById(R.id.btnPresetPhone2)
         btnPresetPhone1 = findViewById(R.id.btnPresetPhone1)
+
+        sliderXOffset = findViewById(R.id.sliderXOffset)
+        textXOffsetValue = findViewById(R.id.textXOffsetValue)
         sliderYOffset = findViewById(R.id.sliderYOffset)
         textYOffsetValue = findViewById(R.id.textYOffsetValue)
         sliderWidth = findViewById(R.id.sliderWidth)
         textWidthValue = findViewById(R.id.textWidthValue)
+        sliderHeight = findViewById(R.id.sliderHeight)
+        textHeightValue = findViewById(R.id.textHeightValue)
+        sliderRadius = findViewById(R.id.sliderRadius)
+        textRadiusValue = findViewById(R.id.textRadiusValue)
+        sliderCutout = findViewById(R.id.sliderCutout)
+        textCutoutValue = findViewById(R.id.textCutoutValue)
 
         switchMusicIsland = findViewById(R.id.switchMusicIsland)
         switchChargingIsland = findViewById(R.id.switchChargingIsland)
         switchNotificationIsland = findViewById(R.id.switchNotificationIsland)
+        switchHaptics = findViewById(R.id.switchHaptics)
     }
 
     private fun setupTypography() {
         TypefaceHelper.applyNdot(
             appTitleText,
+            headerStatusText,
+            sectionPreviewTitle,
             islandStateBadge,
-            findViewById(R.id.sectionPreviewTitle),
-            textYOffsetValue,
-            textWidthValue,
-            findViewById(R.id.footerNotice)
+            simLeftText,
+            simRightText
         )
     }
 
     private fun setupListeners() {
         switchMasterIsland.setOnCheckedChangeListener { _, isChecked ->
             prefs.isEnabled = isChecked
+            headerStatusText.text = if (isChecked) "NOTHING OS 3.0 // ACTIVE" else "SERVICE PAUSED"
+            headerStatusText.setTextColor(
+                if (isChecked) Color.parseColor("#D71920") else Color.parseColor("#777777")
+            )
             if (isChecked) {
                 if (Settings.canDrawOverlays(this)) {
-                    startIslandService()
-                    Toast.makeText(this, "Nothing Island Activated!", Toast.LENGTH_SHORT).show()
+                    startIslandServiceSafely()
                 } else {
                     requestOverlayPermission()
+                    switchMasterIsland.isChecked = false
                 }
             } else {
-                stopIslandService()
-                Toast.makeText(this, "Nothing Island Disabled", Toast.LENGTH_SHORT).show()
+                stopIslandServiceSafely()
             }
         }
 
+        // Permissions cards
         cardOverlayPermission.setOnClickListener {
-            if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
+            NothingHapticHelper.vibrateTick(it)
             requestOverlayPermission()
         }
 
         cardNotificationPermission.setOnClickListener {
-            if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
+            NothingHapticHelper.vibrateTick(it)
             requestNotificationPermission()
         }
 
-        // Test Triggers
+        // Test Buttons
         btnTestMusic.setOnClickListener {
-            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(this)
+            NothingHapticHelper.vibrateTick(it)
             simulateMusicIsland()
         }
 
         btnTestCharging.setOnClickListener {
-            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(this)
+            NothingHapticHelper.vibrateTick(it)
             simulateChargingIsland()
         }
 
         btnTestNotification.setOnClickListener {
-            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(this)
+            NothingHapticHelper.vibrateTick(it)
             simulateNotificationIsland()
         }
 
-        // Calibration presets
+        // Presets
         btnPresetPhone2.setOnClickListener {
-            if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
-            sliderYOffset.value = 18f
-            sliderWidth.value = 84f
-            prefs.xOffset = 0
-            prefs.yOffset = 18
-            prefs.baseWidth = 84
-            IslandOverlayService.instance?.updatePosition(0, 18, 84, prefs.baseHeight)
+            NothingHapticHelper.vibratePop(this)
+            applyPreset(x = 0, y = 14, width = 110, height = 36, radius = 20, cutout = 28)
+            Toast.makeText(this, "Preset applied: Nothing Phone (2/2a)", Toast.LENGTH_SHORT).show()
         }
 
         btnPresetPhone1.setOnClickListener {
-            if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
-            sliderYOffset.value = 16f
-            sliderWidth.value = 76f
-            prefs.xOffset = -130
-            prefs.yOffset = 16
-            prefs.baseWidth = 76
-            IslandOverlayService.instance?.updatePosition(-130, 16, 76, prefs.baseHeight)
+            NothingHapticHelper.vibratePop(this)
+            applyPreset(x = -75, y = 14, width = 110, height = 36, radius = 20, cutout = 28)
+            Toast.makeText(this, "Preset applied: Nothing Phone (1)", Toast.LENGTH_SHORT).show()
+        }
+
+        btnResetDefaults.setOnClickListener {
+            NothingHapticHelper.vibrateTick(it)
+            applyPreset(x = 0, y = 14, width = 110, height = 36, radius = 20, cutout = 28)
+            Toast.makeText(this, "Reset to factory defaults", Toast.LENGTH_SHORT).show()
+        }
+
+        // Sliders Listeners
+        sliderXOffset.addOnChangeListener { _, value, fromUser ->
+            textXOffsetValue.text = "${value.toInt()} dp"
+            if (fromUser) {
+                prefs.xOffset = value.toInt()
+                notifyGeometryUpdate()
+            }
         }
 
         sliderYOffset.addOnChangeListener { _, value, fromUser ->
             textYOffsetValue.text = "${value.toInt()} dp"
             if (fromUser) {
                 prefs.yOffset = value.toInt()
-                IslandOverlayService.instance?.updatePosition(prefs.xOffset, value.toInt(), prefs.baseWidth, prefs.baseHeight)
+                notifyGeometryUpdate()
             }
         }
 
         sliderWidth.addOnChangeListener { _, value, fromUser ->
             textWidthValue.text = "${value.toInt()} dp"
             if (fromUser) {
-                prefs.baseWidth = value.toInt()
-                simSpacer.layoutParams.width = (value * resources.displayMetrics.density).toInt()
-                simSpacer.requestLayout()
-                IslandOverlayService.instance?.updatePosition(prefs.xOffset, prefs.yOffset, value.toInt(), prefs.baseHeight)
+                prefs.islandWidth = value.toInt()
+                notifyGeometryUpdate()
             }
         }
 
-        // Feature toggles
+        sliderHeight.addOnChangeListener { _, value, fromUser ->
+            textHeightValue.text = "${value.toInt()} dp"
+            if (fromUser) {
+                prefs.islandHeight = value.toInt()
+                notifyGeometryUpdate()
+            }
+        }
+
+        sliderRadius.addOnChangeListener { _, value, fromUser ->
+            textRadiusValue.text = "${value.toInt()} dp"
+            if (fromUser) {
+                prefs.cornerRadius = value.toInt()
+                notifyGeometryUpdate()
+            }
+        }
+
+        sliderCutout.addOnChangeListener { _, value, fromUser ->
+            textCutoutValue.text = "${value.toInt()} dp"
+            if (fromUser) {
+                prefs.cutoutSize = value.toInt()
+                notifyGeometryUpdate()
+            }
+        }
+
+        // Switches
         switchMusicIsland.setOnCheckedChangeListener { _, isChecked ->
             prefs.musicIslandEnabled = isChecked
         }
+
         switchChargingIsland.setOnCheckedChangeListener { _, isChecked ->
             prefs.chargingIslandEnabled = isChecked
         }
+
         switchNotificationIsland.setOnCheckedChangeListener { _, isChecked ->
             prefs.notificationIslandEnabled = isChecked
+        }
+
+        switchHaptics.setOnCheckedChangeListener { _, isChecked ->
+            prefs.hapticsEnabled = isChecked
+        }
+    }
+
+    private fun applyPreset(x: Int, y: Int, width: Int, height: Int, radius: Int, cutout: Int) {
+        prefs.xOffset = x
+        prefs.yOffset = y
+        prefs.islandWidth = width
+        prefs.islandHeight = height
+        prefs.cornerRadius = radius
+        prefs.cutoutSize = cutout
+
+        sliderXOffset.value = x.toFloat()
+        textXOffsetValue.text = "$x dp"
+
+        sliderYOffset.value = y.toFloat()
+        textYOffsetValue.text = "$y dp"
+
+        sliderWidth.value = width.toFloat()
+        textWidthValue.text = "$width dp"
+
+        sliderHeight.value = height.toFloat()
+        textHeightValue.text = "$height dp"
+
+        sliderRadius.value = radius.toFloat()
+        textRadiusValue.text = "$radius dp"
+
+        sliderCutout.value = cutout.toFloat()
+        textCutoutValue.text = "$cutout dp"
+
+        notifyGeometryUpdate()
+    }
+
+    private fun notifyGeometryUpdate() {
+        updateSimulatedIslandAppearance()
+        IslandOverlayService.instance?.updateAppearance(
+            xOffset = prefs.xOffset,
+            yOffset = prefs.yOffset,
+            width = prefs.islandWidth,
+            height = prefs.islandHeight,
+            cornerRadius = prefs.cornerRadius,
+            cutoutSize = prefs.cutoutSize
+        )
+    }
+
+    private fun updateSimulatedIslandAppearance() {
+        val density = resources.displayMetrics.density
+
+        // Update corner radius
+        val radiusPx = prefs.cornerRadius * density
+        val bgDrawable = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(Color.BLACK)
+            setStroke((1.2f * density).toInt(), Color.parseColor("#262626"))
+            cornerRadius = radiusPx
+        }
+        simulatedIsland.background = bgDrawable
+
+        // Update dimensions
+        val lp = simulatedIsland.layoutParams as? LinearLayout.LayoutParams
+            ?: (simulatedIsland.layoutParams as? android.widget.FrameLayout.LayoutParams)
+
+        if (lp != null) {
+            lp.height = (prefs.islandHeight * density).toInt()
+            simulatedIsland.layoutParams = lp
+        }
+        simulatedIsland.minimumWidth = (prefs.islandWidth * density).toInt()
+
+        // Spacer size
+        simSpacer.layoutParams = simSpacer.layoutParams.apply {
+            width = (prefs.cutoutSize * density).toInt()
+            height = (prefs.cutoutSize * density).toInt()
         }
     }
 
     private fun loadPreferences() {
         switchMasterIsland.isChecked = prefs.isEnabled
-        sliderYOffset.value = prefs.yOffset.toFloat().coerceIn(0f, 80f)
+
+        sliderXOffset.value = prefs.xOffset.toFloat().coerceIn(-120f, 120f)
+        textXOffsetValue.text = "${prefs.xOffset} dp"
+
+        sliderYOffset.value = prefs.yOffset.toFloat().coerceIn(0f, 60f)
         textYOffsetValue.text = "${prefs.yOffset} dp"
-        sliderWidth.value = prefs.baseWidth.toFloat().coerceIn(50f, 160f)
-        textWidthValue.text = "${prefs.baseWidth} dp"
+
+        sliderWidth.value = prefs.islandWidth.toFloat().coerceIn(70f, 220f)
+        textWidthValue.text = "${prefs.islandWidth} dp"
+
+        sliderHeight.value = prefs.islandHeight.toFloat().coerceIn(28f, 50f)
+        textHeightValue.text = "${prefs.islandHeight} dp"
+
+        sliderRadius.value = prefs.cornerRadius.toFloat().coerceIn(8f, 26f)
+        textRadiusValue.text = "${prefs.cornerRadius} dp"
+
+        sliderCutout.value = prefs.cutoutSize.toFloat().coerceIn(16f, 44f)
+        textCutoutValue.text = "${prefs.cutoutSize} dp"
 
         switchMusicIsland.isChecked = prefs.musicIslandEnabled
         switchChargingIsland.isChecked = prefs.chargingIslandEnabled
         switchNotificationIsland.isChecked = prefs.notificationIslandEnabled
+        switchHaptics.isChecked = prefs.hapticsEnabled
     }
 
     private fun updatePermissionBadges() {
-        val hasOverlay = Settings.canDrawOverlays(this)
-        badgeOverlayPermission.text = if (hasOverlay) "GRANTED" else "GRANT"
-        badgeOverlayPermission.setTextColor(
-            if (hasOverlay) Color.parseColor("#4CAF50") else Color.parseColor("#D71920")
-        )
+        try {
+            val hasOverlay = Settings.canDrawOverlays(this)
+            badgeOverlayPermission.text = if (hasOverlay) "GRANTED" else "GRANT"
+            badgeOverlayPermission.setTextColor(
+                if (hasOverlay) Color.parseColor("#4CAF50") else Color.parseColor("#D71920")
+            )
 
-        val hasNotification = NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
-        badgeNotificationPermission.text = if (hasNotification) "GRANTED" else "GRANT"
-        badgeNotificationPermission.setTextColor(
-            if (hasNotification) Color.parseColor("#4CAF50") else Color.parseColor("#D71920")
-        )
+            val hasNotification =
+                NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
+            badgeNotificationPermission.text = if (hasNotification) "GRANTED" else "GRANT"
+            badgeNotificationPermission.setTextColor(
+                if (hasNotification) Color.parseColor("#4CAF50") else Color.parseColor("#D71920")
+            )
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error checking permissions: ${e.message}")
+        }
     }
 
     private fun requestOverlayPermission() {
-        if (!Settings.canDrawOverlays(this)) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            startActivity(intent)
+        try {
+            if (!Settings.canDrawOverlays(this)) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                startActivity(intent)
+            } else {
+                Toast.makeText(this, "Overlay permission already granted", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error launching overlay settings: ${e.message}")
+            try {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+            } catch (e2: Exception) {
+                Toast.makeText(this, "Open System Settings -> Apps -> (NOT) Island -> Display over other apps", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
     private fun requestNotificationPermission() {
-        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-        startActivity(intent)
-    }
-
-    private fun startIslandService() {
-        val intent = Intent(this, IslandOverlayService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
+        try {
+            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error launching notification settings: ${e.message}")
+            Toast.makeText(this, "Open Settings -> Apps -> Special Access -> Device & app notifications", Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun stopIslandService() {
-        val intent = Intent(this, IslandOverlayService::class.java)
-        stopService(intent)
+    private fun startIslandServiceSafely() {
+        try {
+            val intent = Intent(this, IslandOverlayService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Safe startForegroundService caught: ${e.message}", e)
+        }
     }
 
-    // Simulator visual tests
+    private fun stopIslandServiceSafely() {
+        try {
+            val intent = Intent(this, IslandOverlayService::class.java)
+            stopService(intent)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Safe stopService caught: ${e.message}", e)
+        }
+    }
+
+    // Interactive simulator demonstrations
     private fun simulateMusicIsland() {
         islandStateBadge.text = "MUSIC // LIVE"
         simLeftIcon.setImageResource(R.drawable.ic_music)
         simLeftIcon.visibility = View.VISIBLE
+        simLeftText.visibility = View.GONE
         simRightText.visibility = View.GONE
         simEqualizer.visibility = View.VISIBLE
         simEqualizer.isPlaying = true
 
-        // Also trigger real overlay test
+        // Real screen overlay test
         IslandOverlayService.instance?.onMediaStateChanged("Starboy", "The Weeknd", true, null)
     }
 
@@ -291,11 +474,13 @@ class MainActivity : AppCompatActivity() {
         simLeftIcon.setImageResource(R.drawable.ic_bolt)
         simLeftIcon.visibility = View.VISIBLE
         simEqualizer.visibility = View.GONE
+        simLeftText.visibility = View.VISIBLE
+        simLeftText.text = "CHARGE"
         simRightText.visibility = View.VISIBLE
-        simRightText.text = "88%"
+        simRightText.text = "92%"
 
-        // Also trigger real overlay test
-        IslandOverlayService.instance?.onChargingChanged(true, 88)
+        // Real screen overlay test
+        IslandOverlayService.instance?.onChargingChanged(true, 92)
     }
 
     private fun simulateNotificationIsland() {
@@ -303,10 +488,11 @@ class MainActivity : AppCompatActivity() {
         simLeftIcon.setImageResource(R.drawable.ic_bell)
         simLeftIcon.visibility = View.VISIBLE
         simEqualizer.visibility = View.GONE
+        simLeftText.visibility = View.GONE
         simRightText.visibility = View.VISIBLE
         simRightText.text = "Rahul: Kahan ho?"
 
-        // Also trigger real overlay test
+        // Real screen overlay test
         IslandOverlayService.instance?.onNotificationReceived("WhatsApp", "Rahul", "Bhai call uthana urgent hai!")
     }
 }

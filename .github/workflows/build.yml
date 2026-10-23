@@ -39,37 +39,42 @@ jobs:
       - name: Prepare APK for Artifact & Release
         run: |
           mkdir -p build-output
-          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.0.apk
+          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.1.apk
           ls -la build-output/
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Nothing-Island-v1.0.0
-          path: build-output/Nothing-Island-v1.0.0.apk
+          name: Nothing-Island-v1.0.1
+          path: build-output/Nothing-Island-v1.0.1.apk
           retention-days: 14
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Nothing Island v1.0.0
-          tag_name: v1.0.0
-          files: build-output/Nothing-Island-v1.0.0.apk
+          name: Nothing Island v1.0.1 (Crash-Fix & Size Customizer)
+          tag_name: v1.0.1
+          files: build-output/Nothing-Island-v1.0.1.apk
           draft: false
           prerelease: false
           body: |
-            ## 🔴 (NOT) ISLAND v1.0.0 // Dynamic Punch-Hole for Nothing OS
+            ## 🔴 (NOT) ISLAND v1.0.1 // Hotfix & Ultimate Island Customizer
 
-            Authentic Nothing OS 3.0 Dynamic Island with reactive dot-matrix equalizers, charging glyph animations, and media controls.
+            This release fixes the startup overlay crash, introduces a comprehensive size/position customizer, and guarantees 100% on-device privacy.
 
-            ### ✨ Key Features
-            - **Nothing OS 3.0 Brutalist Aesthetic**: Pure OLED pitch black (`#000000`, elevated cards `#141414`, Nothing crimson `#D71920`) with authentic **NDot57** dot-matrix typography.
-            - **Live Music Equalizer Island**: Real-time dancing 4-column dot-matrix visualizer (`DotMatrixEqualizerView`) in Nothing red.
-            - **Expandable Media Controller Card**: Tap or long-press to view album art, track title, artist, seek/previous/play/pause/next controls.
-            - **Fast Charging Dynamic Alert**: Animated lightning bolt glyph + real-time battery percentage pill upon charging connection.
-            - **Smart Heads-Up Notifications**: Non-intrusive floating pill for WhatsApp, Telegram, calls, and incoming alerts.
-            - **Camera Cutout Calibration**: Ready presets for Nothing Phone (1), Phone (2), Phone (2a) + custom X/Y sliders.
-            - **100% On-Device & Zero Trackers**: No analytics, no accounts, zero telemetry.
+            ### 🚀 What's New & Fixed in v1.0.1
+            - **Overlay Permission Crash Fixed**: Replaced non-vector notification small icon with dedicated monochrome vector asset `ic_notification_island.xml` and added safe foreground service fallbacks for Android 14/15 (Nothing OS 2.5 / 3.0).
+            - **Display Over Other Apps Re-entry Safe**: Safe guard against duplicate WindowManager view attachments when returning from system settings.
+            - **Dynamic Island Size & Geometry Customization**:
+              - **Width Slider**: Adjust compact pill minimum width from 70 dp to 220 dp.
+              - **Height Slider**: Adjust compact pill height from 28 dp to 50 dp.
+              - **Corner Radius Slider**: Real-time adjustment from squircle (8 dp) to full capsule pill (26 dp).
+              - **Horizontal X Offset**: Slide anywhere from -120 dp (left hole) to +120 dp (right hole).
+              - **Vertical Y Position**: Fine-tune distance from top bezel (0 dp to 60 dp).
+              - **Camera Cutout Diameter**: Resize center cutout spacer from 16 dp to 44 dp.
+            - **Revamped Flagship UI**: Deep brutalist Nothing OS 3.0 cards, crisp typography, and real-time live preview studio.
+            - **Zero Data Leak Guarantee**: Fully verified zero internet permission (`android.permission.INTERNET` absent). 100% on-device.
 
-            ### 📦 Download
-            Download the signed APK below and install directly on any Android 8.0 - 15+ device.
+            ### 📦 Direct Download
+            Download the signed release APK below:
+            **Nothing-Island-v1.0.1.apk**

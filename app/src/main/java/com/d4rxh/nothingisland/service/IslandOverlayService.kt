@@ -11,11 +11,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.Settings
 import android.transition.ChangeBounds
 import android.transition.TransitionManager
 import android.util.Log
@@ -41,7 +44,7 @@ import com.d4rxh.nothingisland.ui.DotMatrixEqualizerView
 class IslandOverlayService : Service() {
 
     private lateinit var windowManager: WindowManager
-    private lateinit var overlayView: View
+    private var overlayView: View? = null
     private lateinit var prefs: IslandPreferences
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -94,76 +97,116 @@ class IslandOverlayService : Service() {
         prefs = IslandPreferences(this)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-        startForegroundNotification()
-        createOverlayView()
+        startForegroundNotificationSafely()
+        initOverlay()
     }
 
-    private fun startForegroundNotification() {
-        val channelId = "nothing_island_channel"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Nothing Island Foreground",
-                NotificationManager.IMPORTANCE_MIN
-            ).apply {
-                description = "Runs the Nothing Island floating overlay"
-                setShowBadge(false)
-            }
-            val nm = getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(channel)
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (overlayView == null || overlayView?.isAttachedToWindow != true) {
+            initOverlay()
         }
+        return START_STICKY
+    }
 
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE
-        )
+    private fun startForegroundNotificationSafely() {
+        try {
+            val channelId = "nothing_island_service_channel"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    channelId,
+                    "(NOT) Island Service",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "Dynamic punch-hole overlay service"
+                    setShowBadge(false)
+                }
+                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.createNotificationChannel(channel)
+            }
 
-        val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.app_logo)
-            .setContentTitle("(NOT) ISLAND ACTIVE")
-            .setContentText("Displaying Nothing Dynamic Punch-Hole")
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .build()
+            val pendingIntent = PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val notification: Notification = NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(R.drawable.ic_notification_island)
+                .setContentTitle("(NOT) ISLAND")
+                .setContentText("Dynamic punch-hole active")
+                .setContentIntent(pendingIntent)
+                .setOngoing(true)
+                .setSilent(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build()
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(1001, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                try {
+                    startForeground(1001, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                } catch (e: Exception) {
+                    startForeground(1001, notification)
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(1001, notification, 0)
             } else {
                 startForeground(1001, notification)
             }
-        } else {
-            startForeground(1001, notification)
+        } catch (e: Exception) {
+            Log.e("IslandService", "Could not start foreground notification: ${e.message}", e)
+        }
+    }
+
+    private fun initOverlay() {
+        if (!Settings.canDrawOverlays(this)) {
+            Log.w("IslandService", "Overlay permission not granted; delaying overlay creation")
+            return
+        }
+
+        try {
+            createOverlayView()
+        } catch (e: Exception) {
+            Log.e("IslandService", "Fatal error creating overlay view", e)
         }
     }
 
     @SuppressLint("InflateParams", "ClickableViewAccessibility")
     private fun createOverlayView() {
-        overlayView = LayoutInflater.from(this).inflate(R.layout.layout_island_overlay, null)
+        // Clean up any existing view first
+        if (overlayView != null) {
+            try {
+                if (overlayView?.isAttachedToWindow == true) {
+                    windowManager.removeViewImmediate(overlayView)
+                }
+            } catch (e: Exception) {
+                Log.w("IslandService", "Old overlay cleanup error: ${e.message}")
+            }
+            overlayView = null
+        }
 
-        islandCapsule = overlayView.findViewById(R.id.islandCapsule)
-        compactContainer = overlayView.findViewById(R.id.compactContainer)
-        compactLeftIcon = overlayView.findViewById(R.id.compactLeftIcon)
-        compactLeftText = overlayView.findViewById(R.id.compactLeftText)
-        centerCutoutSpacer = overlayView.findViewById(R.id.centerCutoutSpacer)
-        compactRightText = overlayView.findViewById(R.id.compactRightText)
-        compactEqualizer = overlayView.findViewById(R.id.compactEqualizer)
+        val view = LayoutInflater.from(this).inflate(R.layout.layout_island_overlay, null)
+        overlayView = view
 
-        expandedContainer = overlayView.findViewById(R.id.expandedContainer)
-        expandedAppIcon = overlayView.findViewById(R.id.expandedAppIcon)
-        expandedSourceAppText = overlayView.findViewById(R.id.expandedSourceAppText)
-        expandedArtwork = overlayView.findViewById(R.id.expandedArtwork)
-        expandedTitleText = overlayView.findViewById(R.id.expandedTitleText)
-        expandedArtistText = overlayView.findViewById(R.id.expandedArtistText)
-        expandedEqualizer = overlayView.findViewById(R.id.expandedEqualizer)
-        mediaControlsRow = overlayView.findViewById(R.id.mediaControlsRow)
-        btnPrev = overlayView.findViewById(R.id.btnPrev)
-        btnPlayPause = overlayView.findViewById(R.id.btnPlayPause)
-        btnNext = overlayView.findViewById(R.id.btnNext)
-        expandedNotificationBody = overlayView.findViewById(R.id.expandedNotificationBody)
+        islandCapsule = view.findViewById(R.id.islandCapsule)
+        compactContainer = view.findViewById(R.id.compactContainer)
+        compactLeftIcon = view.findViewById(R.id.compactLeftIcon)
+        compactLeftText = view.findViewById(R.id.compactLeftText)
+        centerCutoutSpacer = view.findViewById(R.id.centerCutoutSpacer)
+        compactRightText = view.findViewById(R.id.compactRightText)
+        compactEqualizer = view.findViewById(R.id.compactEqualizer)
+
+        expandedContainer = view.findViewById(R.id.expandedContainer)
+        expandedAppIcon = view.findViewById(R.id.expandedAppIcon)
+        expandedSourceAppText = view.findViewById(R.id.expandedSourceAppText)
+        expandedArtwork = view.findViewById(R.id.expandedArtwork)
+        expandedTitleText = view.findViewById(R.id.expandedTitleText)
+        expandedArtistText = view.findViewById(R.id.expandedArtistText)
+        expandedEqualizer = view.findViewById(R.id.expandedEqualizer)
+        mediaControlsRow = view.findViewById(R.id.mediaControlsRow)
+        btnPrev = view.findViewById(R.id.btnPrev)
+        btnPlayPause = view.findViewById(R.id.btnPlayPause)
+        btnNext = view.findViewById(R.id.btnNext)
+        expandedNotificationBody = view.findViewById(R.id.expandedNotificationBody)
 
         TypefaceHelper.applyNdot(
             compactLeftText,
@@ -172,12 +215,7 @@ class IslandOverlayService : Service() {
             expandedTitleText
         )
 
-        // Set spacer size to match punch hole
-        centerCutoutSpacer.layoutParams = centerCutoutSpacer.layoutParams.apply {
-            width = dpToPx(prefs.baseWidth)
-            height = dpToPx(prefs.baseHeight)
-        }
-
+        applyCustomStyling()
         setupInteractions()
 
         val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -192,20 +230,51 @@ class IslandOverlayService : Service() {
             WindowManager.LayoutParams.WRAP_CONTENT,
             layoutFlag,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             x = dpToPx(prefs.xOffset)
             y = dpToPx(prefs.yOffset)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
         }
 
         try {
-            windowManager.addView(overlayView, layoutParams)
-            updateState(State.IDLE)
+            windowManager.addView(view, layoutParams)
+            // Initial layout without animation
+            applyStateVisibilities(State.IDLE)
         } catch (e: Exception) {
-            Log.e("IslandService", "Could not add overlay view", e)
+            Log.e("IslandService", "Could not add overlay view to WindowManager", e)
+        }
+    }
+
+    private fun applyCustomStyling() {
+        // Dynamic capsule background with user-defined corner radius
+        val radiusPx = dpToPx(prefs.cornerRadius).toFloat()
+        val bgDrawable = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(Color.BLACK)
+            setStroke(dpToPx(1.2f), Color.parseColor("#262626"))
+            cornerRadius = radiusPx
+        }
+        islandCapsule.background = bgDrawable
+
+        // Dynamic height & min-width
+        compactContainer.layoutParams = compactContainer.layoutParams.apply {
+            height = dpToPx(prefs.islandHeight)
+        }
+        islandCapsule.minimumWidth = dpToPx(prefs.islandWidth)
+
+        // Center cutout spacer
+        centerCutoutSpacer.layoutParams = centerCutoutSpacer.layoutParams.apply {
+            width = dpToPx(prefs.cutoutSize)
+            height = dpToPx(prefs.cutoutSize)
         }
     }
 
@@ -237,16 +306,28 @@ class IslandOverlayService : Service() {
         }
     }
 
-    fun updatePosition(xOffset: Int, yOffset: Int, baseWidth: Int, baseHeight: Int) {
+    fun updateAppearance(
+        xOffset: Int,
+        yOffset: Int,
+        width: Int,
+        height: Int,
+        cornerRadius: Int,
+        cutoutSize: Int
+    ) {
+        val view = overlayView ?: return
+        if (!view.isAttachedToWindow) return
+
         layoutParams?.let { params ->
             params.x = dpToPx(xOffset)
             params.y = dpToPx(yOffset)
-            windowManager.updateViewLayout(overlayView, params)
+            try {
+                windowManager.updateViewLayout(view, params)
+            } catch (e: Exception) {
+                Log.w("IslandService", "Error updating layout params", e)
+            }
         }
-        centerCutoutSpacer.layoutParams = centerCutoutSpacer.layoutParams.apply {
-            width = dpToPx(baseWidth)
-            height = dpToPx(baseHeight)
-        }
+
+        applyCustomStyling()
     }
 
     fun onMediaStateChanged(title: String, artist: String, isPlaying: Boolean, artwork: Bitmap?) {
@@ -258,32 +339,35 @@ class IslandOverlayService : Service() {
         currentArtwork = artwork
 
         mainHandler.post {
-            compactEqualizer.isPlaying = isPlaying
-            expandedEqualizer.isPlaying = isPlaying
-            btnPlayPause.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
-
-            if (artwork != null) {
-                compactLeftIcon.setImageBitmap(artwork)
-                expandedArtwork.setImageBitmap(artwork)
-            } else {
+            if (title.isNotEmpty() && isPlaying) {
                 compactLeftIcon.setImageResource(R.drawable.ic_music)
-                expandedArtwork.setImageResource(R.drawable.app_logo)
-            }
+                compactEqualizer.isPlaying = true
 
-            expandedTitleText.text = title.ifEmpty { "Playing Music" }
-            expandedArtistText.text = artist.ifEmpty { "Nothing Audio" }
-            compactRightText.text = title
+                // Update expanded view
+                expandedTitleText.text = title
+                expandedArtistText.text = artist
+                expandedSourceAppText.text = "NOW PLAYING"
+                expandedAppIcon.setImageResource(R.drawable.ic_music)
+                btnPlayPause.setImageResource(R.drawable.ic_pause)
+                expandedEqualizer.isPlaying = true
 
-            if (isPlaying || currentState == State.MUSIC_COMPACT) {
+                if (artwork != null) {
+                    compactLeftIcon.setImageBitmap(artwork)
+                    expandedArtwork.setImageBitmap(artwork)
+                    expandedArtwork.visibility = View.VISIBLE
+                } else {
+                    compactLeftIcon.setImageResource(R.drawable.ic_music)
+                    expandedArtwork.visibility = View.GONE
+                }
+
                 if (currentState != State.EXPANDED) {
                     updateState(State.MUSIC_COMPACT)
                 }
             } else if (!isPlaying && currentState == State.MUSIC_COMPACT) {
-                mainHandler.postDelayed({
-                    if (!isMusicPlaying && currentState == State.MUSIC_COMPACT) {
-                        updateState(State.IDLE)
-                    }
-                }, 3000)
+                compactEqualizer.isPlaying = false
+                expandedEqualizer.isPlaying = false
+                btnPlayPause.setImageResource(R.drawable.ic_play)
+                updateState(State.IDLE)
             }
         }
     }
@@ -294,44 +378,57 @@ class IslandOverlayService : Service() {
         mainHandler.post {
             if (isCharging) {
                 compactLeftIcon.setImageResource(R.drawable.ic_bolt)
-                compactLeftIcon.visibility = View.VISIBLE
                 compactRightText.text = "$batteryPercent%"
-                compactRightText.visibility = View.VISIBLE
+                compactLeftText.text = "CHARGING"
+
+                expandedTitleText.text = "NOTHING FAST CHARGE"
+                expandedArtistText.text = "Battery level at $batteryPercent%"
+                expandedSourceAppText.text = "GLYPH CHARGING"
+                expandedAppIcon.setImageResource(R.drawable.ic_bolt)
+                mediaControlsRow.visibility = View.GONE
 
                 updateState(State.CHARGING_COMPACT)
 
-                // Auto collapse to previous state after 5 seconds
-                mainHandler.removeCallbacksAndMessages(null)
+                // Auto collapse to IDLE after 5 seconds if not music
                 mainHandler.postDelayed({
+                    if (currentState == State.CHARGING_COMPACT) {
+                        if (isMusicPlaying) {
+                            updateState(State.MUSIC_COMPACT)
+                        } else {
+                            updateState(State.IDLE)
+                        }
+                    }
+                }, 5000)
+            } else {
+                if (currentState == State.CHARGING_COMPACT) {
                     if (isMusicPlaying) {
                         updateState(State.MUSIC_COMPACT)
                     } else {
                         updateState(State.IDLE)
                     }
-                }, 5000)
+                }
             }
         }
     }
 
-    fun onNotificationReceived(appName: String, title: String, text: String) {
+    fun onNotificationReceived(appName: String, title: String, content: String) {
         if (!prefs.notificationIslandEnabled) return
 
         mainHandler.post {
             compactLeftIcon.setImageResource(R.drawable.ic_bell)
-            compactLeftIcon.visibility = View.VISIBLE
-            compactRightText.text = title.take(15)
-            compactRightText.visibility = View.VISIBLE
+            compactRightText.text = title
 
             expandedSourceAppText.text = appName.uppercase()
             expandedTitleText.text = title
-            expandedArtistText.text = text
-            mediaControlsRow.visibility = View.GONE
+            expandedArtistText.text = content
+            expandedNotificationBody.text = content
             expandedNotificationBody.visibility = View.VISIBLE
-            expandedNotificationBody.text = text
+            mediaControlsRow.visibility = View.GONE
+            expandedAppIcon.setImageResource(R.drawable.ic_bell)
 
             updateState(State.NOTIFICATION_COMPACT)
 
-            // Auto dismiss notification banner after 4.5 seconds
+            // Auto dismiss notification pill after 4.5s
             mainHandler.postDelayed({
                 if (currentState == State.NOTIFICATION_COMPACT) {
                     if (isMusicPlaying) {
@@ -348,12 +445,26 @@ class IslandOverlayService : Service() {
         previousState = currentState
         currentState = newState
 
-        TransitionManager.beginDelayedTransition(islandCapsule as ViewGroup, ChangeBounds().apply {
-            duration = 240
-            interpolator = OvershootInterpolator(0.8f)
-        })
+        val view = overlayView
+        if (view != null && view.isAttachedToWindow) {
+            try {
+                TransitionManager.beginDelayedTransition(
+                    islandCapsule as ViewGroup,
+                    ChangeBounds().apply {
+                        duration = 240
+                        interpolator = OvershootInterpolator(0.8f)
+                    }
+                )
+            } catch (e: Exception) {
+                Log.w("IslandService", "Transition failed, applying directly: ${e.message}")
+            }
+        }
 
-        when (newState) {
+        applyStateVisibilities(newState)
+    }
+
+    private fun applyStateVisibilities(state: State) {
+        when (state) {
             State.IDLE -> {
                 compactContainer.visibility = View.VISIBLE
                 expandedContainer.visibility = View.GONE
@@ -410,6 +521,11 @@ class IslandOverlayService : Service() {
         }
     }
 
+    private fun dpToPx(dp: Float): Int {
+        val density = resources.displayMetrics.density
+        return (dp * density).toInt()
+    }
+
     private fun dpToPx(dp: Int): Int {
         val density = resources.displayMetrics.density
         return (dp * density).toInt()
@@ -419,11 +535,15 @@ class IslandOverlayService : Service() {
         super.onDestroy()
         instance = null
         try {
-            if (::overlayView.isInitialized) {
-                windowManager.removeView(overlayView)
+            overlayView?.let { view ->
+                if (view.isAttachedToWindow) {
+                    windowManager.removeViewImmediate(view)
+                }
             }
         } catch (e: Exception) {
             Log.e("IslandService", "Error removing overlay on destroy", e)
+        } finally {
+            overlayView = null
         }
     }
 

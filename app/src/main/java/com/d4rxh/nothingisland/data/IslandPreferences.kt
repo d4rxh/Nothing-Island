@@ -17,16 +17,33 @@ class IslandPreferences(context: Context) {
         set(value) = prefs.edit().putInt(KEY_X_OFFSET, value).apply()
 
     var yOffset: Int
-        get() = prefs.getInt(KEY_Y_OFFSET, 18)
+        get() = prefs.getInt(KEY_Y_OFFSET, 14)
         set(value) = prefs.edit().putInt(KEY_Y_OFFSET, value).apply()
 
+    var islandWidth: Int
+        get() = prefs.getInt(KEY_ISLAND_WIDTH, 110)
+        set(value) = prefs.edit().putInt(KEY_ISLAND_WIDTH, value).apply()
+
+    var islandHeight: Int
+        get() = prefs.getInt(KEY_ISLAND_HEIGHT, 36)
+        set(value) = prefs.edit().putInt(KEY_ISLAND_HEIGHT, value).apply()
+
+    var cornerRadius: Int
+        get() = prefs.getInt(KEY_CORNER_RADIUS, 20)
+        set(value) = prefs.edit().putInt(KEY_CORNER_RADIUS, value).apply()
+
+    var cutoutSize: Int
+        get() = prefs.getInt(KEY_CUTOUT_SIZE, 28)
+        set(value) = prefs.edit().putInt(KEY_CUTOUT_SIZE, value).apply()
+
+    // Backward compatibility aliases
     var baseWidth: Int
-        get() = prefs.getInt(KEY_BASE_WIDTH, 84)
-        set(value) = prefs.edit().putInt(KEY_BASE_WIDTH, value).apply()
+        get() = islandWidth
+        set(value) { islandWidth = value }
 
     var baseHeight: Int
-        get() = prefs.getInt(KEY_BASE_HEIGHT, 34)
-        set(value) = prefs.edit().putInt(KEY_BASE_HEIGHT, value).apply()
+        get() = islandHeight
+        set(value) { islandHeight = value }
 
     var musicIslandEnabled: Boolean
         get() = prefs.getBoolean(KEY_MUSIC_ENABLED, true)
@@ -48,8 +65,10 @@ class IslandPreferences(context: Context) {
         private const val KEY_ISLAND_ENABLED = "pref_island_enabled"
         private const val KEY_X_OFFSET = "pref_x_offset"
         private const val KEY_Y_OFFSET = "pref_y_offset"
-        private const val KEY_BASE_WIDTH = "pref_base_width"
-        private const val KEY_BASE_HEIGHT = "pref_base_height"
+        private const val KEY_ISLAND_WIDTH = "pref_island_width"
+        private const val KEY_ISLAND_HEIGHT = "pref_island_height"
+        private const val KEY_CORNER_RADIUS = "pref_corner_radius"
+        private const val KEY_CUTOUT_SIZE = "pref_cutout_size"
         private const val KEY_MUSIC_ENABLED = "pref_music_enabled"
         private const val KEY_CHARGING_ENABLED = "pref_charging_enabled"
         private const val KEY_NOTIFICATION_ENABLED = "pref_notification_enabled"
