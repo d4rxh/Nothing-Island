@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">(NOT) ISLAND</string>
+    <string name="island_service_title">Nothing Island Overlay Active</string>
+    <string name="island_service_desc">Displaying dynamic punch-hole island</string>
+</resources>

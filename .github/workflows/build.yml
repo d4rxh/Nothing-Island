@@ -1,0 +1,75 @@
+name: Build and Release Nothing-Island
+
+on:
+  push:
+    branches: [ "main" ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Signed Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradlew Executable
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Prepare APK for Artifact & Release
+        run: |
+          mkdir -p build-output
+          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.0.apk
+          ls -la build-output/
+
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nothing-Island-v1.0.0
+          path: build-output/Nothing-Island-v1.0.0.apk
+          retention-days: 14
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Nothing Island v1.0.0
+          tag_name: v1.0.0
+          files: build-output/Nothing-Island-v1.0.0.apk
+          draft: false
+          prerelease: false
+          body: |
+            ## 🔴 (NOT) ISLAND v1.0.0 // Dynamic Punch-Hole for Nothing OS
+
+            Authentic Nothing OS 3.0 Dynamic Island with reactive dot-matrix equalizers, charging glyph animations, and media controls.
+
+            ### ✨ Key Features
+            - **Nothing OS 3.0 Brutalist Aesthetic**: Pure OLED pitch black (`#000000`, elevated cards `#141414`, Nothing crimson `#D71920`) with authentic **NDot57** dot-matrix typography.
+            - **Live Music Equalizer Island**: Real-time dancing 4-column dot-matrix visualizer (`DotMatrixEqualizerView`) in Nothing red.
+            - **Expandable Media Controller Card**: Tap or long-press to view album art, track title, artist, seek/previous/play/pause/next controls.
+            - **Fast Charging Dynamic Alert**: Animated lightning bolt glyph + real-time battery percentage pill upon charging connection.
+            - **Smart Heads-Up Notifications**: Non-intrusive floating pill for WhatsApp, Telegram, calls, and incoming alerts.
+            - **Camera Cutout Calibration**: Ready presets for Nothing Phone (1), Phone (2), Phone (2a) + custom X/Y sliders.
+            - **100% On-Device & Zero Trackers**: No analytics, no accounts, zero telemetry.
+
+            ### 📦 Download
+            Download the signed APK below and install directly on any Android 8.0 - 15+ device.

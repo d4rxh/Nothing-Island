@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="nothing_black">#000000</color>
+    <color name="nothing_surface">#0A0A0A</color>
+    <color name="nothing_card">#141414</color>
+    <color name="nothing_border">#262626</color>
+    <color name="nothing_divider">#1A1A1A</color>
+    <color name="nothing_white">#FFFFFF</color>
+    <color name="nothing_red">#D71920</color>
+    <color name="nothing_text_secondary">#8E8E8E</color>
+    <color name="nothing_text_muted">#555555</color>
+</resources>
