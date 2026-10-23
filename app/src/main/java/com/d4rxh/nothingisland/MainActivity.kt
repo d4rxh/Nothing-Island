@@ -19,6 +19,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.d4rxh.nothingisland.data.IslandPreferences
 import com.d4rxh.nothingisland.helpers.NothingHapticHelper
 import com.d4rxh.nothingisland.helpers.TypefaceHelper
+import com.d4rxh.nothingisland.service.IslandOverlayManager
 import com.d4rxh.nothingisland.service.IslandOverlayService
 import com.d4rxh.nothingisland.ui.DotMatrixEqualizerView
 import com.google.android.material.materialswitch.MaterialSwitch
