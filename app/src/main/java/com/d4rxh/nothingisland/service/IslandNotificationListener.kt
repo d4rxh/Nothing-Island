@@ -49,7 +49,8 @@ class IslandNotificationListener : NotificationListenerService() {
             val controllers = mediaSessionManager.getActiveSessions(componentName)
             updateMediaController(controllers?.firstOrNull())
 
-            // Ensure overlay service is alive
+            // Ensure Dynamic Island is ALWAYS ON SCREEN
+            IslandOverlayManager.showOverlay(this)
             startService(Intent(this, IslandOverlayService::class.java))
         } catch (e: Exception) {
             Log.e("NotificationListener", "Failed in onListenerConnected: ${e.message}", e)
@@ -109,7 +110,7 @@ class IslandNotificationListener : NotificationListenerService() {
             }
 
             // Forward to Island Overlay
-            IslandOverlayService.instance?.onMediaStateChanged(
+            IslandOverlayManager.onMediaStateChanged(
                 packageName = sourcePackage,
                 appName = appName,
                 title = title,
@@ -132,7 +133,7 @@ class IslandNotificationListener : NotificationListenerService() {
             val title = extras.getCharSequence("android.title")?.toString() ?: ""
             val text = extras.getCharSequence("android.text")?.toString() ?: ""
 
-            // Ignore ongoing media playback notifications to avoid conflict with MediaSession
+            // Ignore ongoing media notifications to avoid duplicate triggers with MediaSession
             if (title.isNotEmpty() && text.isNotEmpty() && !sbn.isOngoing) {
                 val appName = try {
                     val pm = packageManager
@@ -148,7 +149,7 @@ class IslandNotificationListener : NotificationListenerService() {
                     null
                 }
 
-                IslandOverlayService.instance?.onNotificationReceived(appName, title, text, appIcon)
+                IslandOverlayManager.onNotificationReceived(appName, title, text, appIcon)
             }
         } catch (e: Exception) {
             Log.e("NotificationListener", "Error in onNotificationPosted: ${e.message}", e)

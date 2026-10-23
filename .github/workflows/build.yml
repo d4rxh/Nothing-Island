@@ -39,37 +39,35 @@ jobs:
       - name: Prepare APK for Artifact & Release
         run: |
           mkdir -p build-output
-          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.3.apk
+          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.4.apk
           ls -la build-output/
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Nothing-Island-v1.0.3
-          path: build-output/Nothing-Island-v1.0.3.apk
+          name: Nothing-Island-v1.0.4
+          path: build-output/Nothing-Island-v1.0.4.apk
           retention-days: 14
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Nothing Island v1.0.3 (Real-Time Spotify & All Apps Logos + Zero Crash)
-          tag_name: v1.0.3
-          files: build-output/Nothing-Island-v1.0.3.apk
+          name: Nothing Island v1.0.4 (Always-On-Screen & Instant Visibility)
+          tag_name: v1.0.4
+          files: build-output/Nothing-Island-v1.0.4.apk
           draft: false
           prerelease: false
           body: |
-            ## 🔴 (NOT) ISLAND v1.0.3 // Real-Time App Logos & Rock-Solid Architecture
+            ## 🔴 (NOT) ISLAND v1.0.4 // Always-On-Screen Dynamic Island
 
-            This release completely eliminates background crashes during Spotify playback, introduces real-time app logos for WhatsApp/Telegram/Spotify, and delivers a seamless Nothing OS 3.0 Dynamic Island.
+            This release guarantees that the Dynamic Island appears instantly on screen upon granting overlay permission, remains visible 24/7 across all apps, and responds immediately to Spotify, WhatsApp, and charging.
 
-            ### 🚀 What's New & Fixed in v1.0.3
-            - **Zero Crash During Media Playback**: Removed restricted foreground service types that caused Android 14/15 system server to kill the app when Spotify or any player started.
-            - **Dynamic App & Media Logos**:
-              - **Spotify & Music Players**: Compact island now displays the real Spotify green logo or live Album Cover art on the left, and dancing 4-column Nothing Red dot-matrix equalizer on the right.
-              - **All Notifications (WhatsApp, Telegram, Instagram, etc.)**: Compact & expanded island now dynamically extract the official sender app icon and display real-time message previews.
-            - **Always-Visible Standby Island**:
-              - Framing the front camera cutout with an iconic Nothing Crimson red dot (`●`) and `NOTHING` NDot57 dot-matrix typography.
-            - **100% On-Device & Zero Trackers**: No internet permission in manifest.
+            ### 🚀 Highlights in v1.0.4
+            - **Always-On-Screen 24/7 Overlay**: Managed directly through `IslandOverlayManager` tied to the persistent `NotificationListenerService` system lifecycle.
+            - **Instant Display Fix**: Fixed the Master Switch toggle permission race condition where the service was not getting triggered upon returning from Settings.
+            - **Visible High-Contrast Standby Pill**: Prominent Nothing capsule framing the camera cutout with glowing crimson dot (`●`), NDot57 typography, and `#444444` crisp outline.
+            - **Real-Time App Logos**: Automatic official icons for Spotify, YouTube Music, WhatsApp, Telegram, Instagram, and phone calls.
+            - **Zero Data Leak**: 100% on-device, no internet permission in manifest.
 
             ### 📦 Direct Download
-            **[Nothing-Island-v1.0.3.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.3/Nothing-Island-v1.0.3.apk)**
+            **[Nothing-Island-v1.0.4.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.4/Nothing-Island-v1.0.4.apk)**

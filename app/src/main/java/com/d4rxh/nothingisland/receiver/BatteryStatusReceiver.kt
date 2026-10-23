@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.BatteryManager
+import com.d4rxh.nothingisland.service.IslandOverlayManager
 import com.d4rxh.nothingisland.service.IslandOverlayService
 
 class BatteryStatusReceiver : BroadcastReceiver() {
@@ -14,10 +15,12 @@ class BatteryStatusReceiver : BroadcastReceiver() {
         when (intent.action) {
             Intent.ACTION_POWER_CONNECTED -> {
                 val level = getBatteryPercentage(context)
+                IslandOverlayManager.onChargingChanged(true, level)
                 IslandOverlayService.instance?.onChargingChanged(true, level)
             }
             Intent.ACTION_POWER_DISCONNECTED -> {
                 val level = getBatteryPercentage(context)
+                IslandOverlayManager.onChargingChanged(false, level)
                 IslandOverlayService.instance?.onChargingChanged(false, level)
             }
             Intent.ACTION_BATTERY_CHANGED -> {
@@ -29,6 +32,7 @@ class BatteryStatusReceiver : BroadcastReceiver() {
                 val percent = if (level >= 0 && scale > 0) (level * 100) / scale else 50
 
                 if (isCharging) {
+                    IslandOverlayManager.onChargingChanged(true, percent)
                     IslandOverlayService.instance?.onChargingChanged(true, percent)
                 }
             }

@@ -98,7 +98,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updatePermissionBadges()
-        if (prefs.isEnabled && Settings.canDrawOverlays(this)) {
+        if (Settings.canDrawOverlays(this)) {
+            prefs.isEnabled = true
+            switchMasterIsland.isChecked = true
+            headerStatusText.text = "NOTHING OS 3.0 // ACTIVE"
+            headerStatusText.setTextColor(Color.parseColor("#D71920"))
+            IslandOverlayManager.showOverlay(applicationContext)
             startIslandServiceSafely()
         }
     }
@@ -168,12 +173,13 @@ class MainActivity : AppCompatActivity() {
             )
             if (isChecked) {
                 if (Settings.canDrawOverlays(this)) {
+                    IslandOverlayManager.showOverlay(applicationContext)
                     startIslandServiceSafely()
                 } else {
                     requestOverlayPermission()
-                    switchMasterIsland.isChecked = false
                 }
             } else {
+                IslandOverlayManager.hideOverlay()
                 stopIslandServiceSafely()
             }
         }
@@ -322,7 +328,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun notifyGeometryUpdate() {
         updateSimulatedIslandAppearance()
-        IslandOverlayService.instance?.updateAppearance(
+        IslandOverlayManager.updateAppearance(
             xOffset = prefs.xOffset,
             yOffset = prefs.yOffset,
             width = prefs.islandWidth,
@@ -473,7 +479,7 @@ class MainActivity : AppCompatActivity() {
         simEqualizer.isPlaying = true
 
         // Real screen overlay test with Spotify branding
-        IslandOverlayService.instance?.onMediaStateChanged(
+        IslandOverlayManager.onMediaStateChanged(
             packageName = "com.spotify.music",
             appName = "Spotify",
             title = "Starboy",
@@ -495,7 +501,7 @@ class MainActivity : AppCompatActivity() {
         simRightText.text = "92%"
 
         // Real screen overlay test
-        IslandOverlayService.instance?.onChargingChanged(true, 92)
+        IslandOverlayManager.onChargingChanged(true, 92)
     }
 
     private fun simulateNotificationIsland() {
@@ -508,7 +514,7 @@ class MainActivity : AppCompatActivity() {
         simRightText.text = "Rahul: Kahan ho?"
 
         // Real screen overlay test with WhatsApp branding
-        IslandOverlayService.instance?.onNotificationReceived(
+        IslandOverlayManager.onNotificationReceived(
             appName = "WhatsApp",
             title = "Rahul",
             content = "Bhai call uthana urgent hai!",
