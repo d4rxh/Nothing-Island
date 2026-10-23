@@ -14,6 +14,7 @@ import android.provider.Settings
 import android.transition.ChangeBounds
 import android.transition.TransitionManager
 import android.util.Log
+import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -39,6 +40,9 @@ object IslandOverlayManager {
     private var layoutParams: WindowManager.LayoutParams? = null
     private var appContext: Context? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    @Volatile
+    private var isAttached = false
 
     // UI references
     private var islandCapsule: LinearLayout? = null
@@ -77,10 +81,9 @@ object IslandOverlayManager {
     private var currentAppName = "SPOTIFY"
 
     fun showOverlay(context: Context) {
-        val app = context.applicationContext
-        appContext = app
+        appContext = context.applicationContext
 
-        if (!Settings.canDrawOverlays(app)) {
+        if (!Settings.canDrawOverlays(context)) {
             Log.w(TAG, "Cannot show overlay: Settings.canDrawOverlays is false")
             return
         }
@@ -88,11 +91,13 @@ object IslandOverlayManager {
         mainHandler.post {
             try {
                 if (windowManager == null) {
-                    windowManager = app.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                    windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
                 }
 
-                if (overlayView == null || overlayView?.isAttachedToWindow != true) {
-                    createAndAttachOverlay(app)
+                if (!isAttached || overlayView == null) {
+                    createAndAttachOverlay(context)
+                } else {
+                    applyStateVisibilities(currentState)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in showOverlay: ${e.message}", e)
@@ -106,18 +111,10 @@ object IslandOverlayManager {
         val prefs = IslandPreferences(context)
 
         // Remove old view if any exists
-        overlayView?.let { oldView ->
-            try {
-                if (oldView.isAttachedToWindow) {
-                    wm.removeViewImmediate(oldView)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error cleaning old view: ${e.message}")
-            }
-            overlayView = null
-        }
+        cleanOldView()
 
-        val view = LayoutInflater.from(context).inflate(R.layout.layout_island_overlay, null)
+        val themedContext = ContextThemeWrapper(context, R.style.Theme_NOTIsland)
+        val view = LayoutInflater.from(themedContext).inflate(R.layout.layout_island_overlay, null)
         overlayView = view
 
         islandCapsule = view.findViewById(R.id.islandCapsule)
@@ -156,13 +153,18 @@ object IslandOverlayManager {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-        layoutParams = WindowManager.LayoutParams(
+        // Critical flags: FLAG_LAYOUT_NO_LIMITS + FLAG_LAYOUT_IN_SCREEN ensures the window
+        // extends past the status bar boundaries directly to the top edge over the camera cutout!
+        val windowFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+
+        val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             layoutFlag,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            windowFlags,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -173,14 +175,32 @@ object IslandOverlayManager {
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
         }
+        layoutParams = params
 
         try {
-            wm.addView(view, layoutParams)
+            wm.addView(view, params)
+            isAttached = true
             applyStateVisibilities(State.IDLE)
-            Log.i(TAG, "Dynamic Island overlay attached successfully to WindowManager!")
+            Log.i(TAG, "Dynamic Island overlay attached successfully to WindowManager at (x=${params.x}, y=${params.y})")
         } catch (e: Exception) {
             Log.e(TAG, "Fatal error adding overlay view: ${e.message}", e)
+            isAttached = false
         }
+    }
+
+    private fun cleanOldView() {
+        val wm = windowManager ?: return
+        overlayView?.let { oldView ->
+            try {
+                if (oldView.isAttachedToWindow || isAttached) {
+                    wm.removeViewImmediate(oldView)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error cleaning old view: ${e.message}")
+            }
+        }
+        overlayView = null
+        isAttached = false
     }
 
     private fun applyCustomStyling(context: Context) {
@@ -192,8 +212,8 @@ object IslandOverlayManager {
             val bgDrawable = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 setColor(Color.BLACK)
-                // Visible high-contrast border so it clearly stands out on any status bar
-                setStroke(dpToPx(context, 1.5f), Color.parseColor("#444444"))
+                // Distinct high-contrast border so it is clearly visible on any wallpaper/status bar
+                setStroke(dpToPx(context, 1.5f), Color.parseColor("#555555"))
                 cornerRadius = radiusPx
             }
             capsule.background = bgDrawable
@@ -227,7 +247,7 @@ object IslandOverlayManager {
         }
 
         btnPlayPause?.setOnClickListener {
-            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(context)
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(it.context)
             IslandMediaManager.togglePlayPause()
         }
 
@@ -252,7 +272,7 @@ object IslandOverlayManager {
     ) {
         val context = appContext ?: return
         val view = overlayView ?: return
-        if (!view.isAttachedToWindow) return
+        if (!isAttached) return
 
         layoutParams?.let { params ->
             params.x = dpToPx(context, xOffset)
@@ -355,21 +375,16 @@ object IslandOverlayManager {
                 if (isCharging) {
                     compactLeftIcon?.setImageResource(R.drawable.ic_bolt)
                     compactLeftIcon?.visibility = View.VISIBLE
-                    compactLeftText?.text = "CHARGE"
                     compactLeftText?.visibility = View.VISIBLE
+                    compactLeftText?.text = "CHARGE"
+
                     compactRightText?.text = "$batteryPercent%"
                     compactRightText?.visibility = View.VISIBLE
                     compactEqualizer?.visibility = View.GONE
 
-                    expandedTitleText?.text = "NOTHING FAST CHARGE"
-                    expandedArtistText?.text = "Battery level at $batteryPercent%"
-                    expandedSourceAppText?.text = "GLYPH CHARGING"
-                    expandedAppIcon?.setImageResource(R.drawable.ic_bolt)
-                    expandedArtwork?.visibility = View.GONE
-                    mediaControlsRow?.visibility = View.GONE
-
                     updateState(State.CHARGING_COMPACT)
 
+                    // Auto collapse back to IDLE or MUSIC after 5 seconds
                     mainHandler.postDelayed({
                         if (currentState == State.CHARGING_COMPACT) {
                             if (isMusicPlaying) {
@@ -432,13 +447,13 @@ object IslandOverlayManager {
                 expandedSourceAppText?.text = appName.uppercase()
                 expandedTitleText?.text = title
                 expandedArtistText?.text = content
-                expandedNotificationBody?.text = content
-                expandedNotificationBody?.visibility = View.VISIBLE
                 mediaControlsRow?.visibility = View.GONE
-                expandedEqualizer?.visibility = View.GONE
+                expandedNotificationBody?.visibility = View.VISIBLE
+                expandedNotificationBody?.text = content
 
                 updateState(State.NOTIFICATION_COMPACT)
 
+                // Auto dismiss notification banner after 4.5 seconds
                 mainHandler.postDelayed({
                     if (currentState == State.NOTIFICATION_COMPACT) {
                         if (isMusicPlaying) {
@@ -460,7 +475,7 @@ object IslandOverlayManager {
         try {
             val view = overlayView
             val capsule = islandCapsule
-            if (view != null && view.isAttachedToWindow && capsule != null) {
+            if (view != null && isAttached && capsule != null) {
                 try {
                     TransitionManager.beginDelayedTransition(
                         capsule as ViewGroup,
@@ -489,10 +504,14 @@ object IslandOverlayManager {
                     expandedContainer?.visibility = View.GONE
 
                     compactLeftIcon?.setImageResource(R.drawable.ic_dot)
+                    compactLeftIcon?.background = null
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
 
+                    centerCutoutSpacer?.visibility = View.VISIBLE
+
                     compactRightText?.text = "NOTHING"
+                    compactRightText?.setTextColor(Color.WHITE)
                     compactRightText?.visibility = View.VISIBLE
                     compactEqualizer?.visibility = View.GONE
                 }
@@ -501,6 +520,7 @@ object IslandOverlayManager {
                     expandedContainer?.visibility = View.GONE
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
+                    centerCutoutSpacer?.visibility = View.VISIBLE
                     compactRightText?.visibility = View.GONE
                     compactEqualizer?.visibility = View.VISIBLE
                 }
@@ -511,6 +531,7 @@ object IslandOverlayManager {
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.VISIBLE
                     compactLeftText?.text = "CHARGE"
+                    centerCutoutSpacer?.visibility = View.VISIBLE
                     compactRightText?.visibility = View.VISIBLE
                     compactEqualizer?.visibility = View.GONE
                 }
@@ -519,6 +540,7 @@ object IslandOverlayManager {
                     expandedContainer?.visibility = View.GONE
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
+                    centerCutoutSpacer?.visibility = View.VISIBLE
                     compactRightText?.visibility = View.VISIBLE
                     compactEqualizer?.visibility = View.GONE
                 }
@@ -528,11 +550,14 @@ object IslandOverlayManager {
                     if (isMusicPlaying) {
                         mediaControlsRow?.visibility = View.VISIBLE
                         expandedNotificationBody?.visibility = View.GONE
+                    } else {
+                        mediaControlsRow?.visibility = View.GONE
+                        expandedNotificationBody?.visibility = View.VISIBLE
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in applyStateVisibilities: ${e.message}", e)
+            Log.e(TAG, "Error in applyStateVisibilities: ${e.message}")
         }
     }
 
@@ -552,13 +577,14 @@ object IslandOverlayManager {
         val wm = windowManager ?: return
         overlayView?.let { view ->
             try {
-                if (view.isAttachedToWindow) {
+                if (isAttached) {
                     wm.removeViewImmediate(view)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in hideOverlay: ${e.message}")
             } finally {
                 overlayView = null
+                isAttached = false
             }
         }
     }

@@ -39,43 +39,36 @@ jobs:
       - name: Prepare APK for Artifact & Release
         run: |
           mkdir -p build-output
-          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.5.apk
+          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.6.apk
           ls -la build-output/
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Nothing-Island-v1.0.5
-          path: build-output/Nothing-Island-v1.0.5.apk
+          name: Nothing-Island-v1.0.6
+          path: build-output/Nothing-Island-v1.0.6.apk
           retention-days: 14
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Nothing Island v1.0.5 (Android 14/15 24/7 Foreground Service & Zero-Crash Architecture)
-          tag_name: v1.0.5
-          files: build-output/Nothing-Island-v1.0.5.apk
+          name: Nothing Island v1.0.6 (Direct WindowManager Overlay & Force Show Integration)
+          tag_name: v1.0.6
+          files: build-output/Nothing-Island-v1.0.6.apk
           draft: false
           prerelease: false
           body: |
-            ## 🔴 (NOT) ISLAND v1.0.5 // Final Rock-Solid Release
+            ## 🔴 (NOT) ISLAND v1.0.6 // Direct WindowManager Overlay & Instant Punch-Hole Visibility
 
-            This release completely solves the background process killing on Android 14/15 (Nothing OS 2.6 / 3.0), implements the official `specialUse` foreground service with persistent silent notification, and guarantees 24/7 Always-On-Screen Dynamic Island.
+            This release fixes the Android status-bar cutout clipping issue by restoring `FLAG_LAYOUT_NO_LIMITS` and `FLAG_LAYOUT_IN_SCREEN`, wraps inflation with `ContextThemeWrapper`, prevents double-attach race conditions, and introduces a one-tap `FORCE SHOW ISLAND ON SCREEN` trigger in the app dashboard.
 
-            ### 🚀 Highlights in v1.0.5
-            - **Official Android 14/15 Foreground Service**:
-              - Declared official `specialUse` type with `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` and `POST_NOTIFICATIONS`.
-              - App Info now cleanly displays "Notifications: Allowed" and shows active `(NOT) ISLAND ACTIVE` silent status.
-              - Nothing OS and Android OS will NEVER freeze, kill, or hibernate the overlay service.
-            - **Spotify Playback Zero-Crash Guarantee**:
-              - Completely decoupled from restrictive mediaPlayback checks, eliminating `SecurityException`.
-              - Displays real green Spotify app logo, live dancing 4-column dot-matrix equalizer, and album art.
-            - **Real-Time App Notifications**:
-              - WhatsApp, Telegram, Instagram, etc. display their real icons and previews.
-            - **24/7 Standby Island**:
-              - Always-on capsule framing the camera punch-hole with Nothing Red dot (`●`) and NDot57 dot-matrix typography.
-            - **Zero Data Leak**:
-              - 100% on-device, zero internet permission (`android.permission.INTERNET` strictly absent).
+            ### 🚀 Highlights in v1.0.6
+            - **Restored `FLAG_LAYOUT_NO_LIMITS`**: Allows the overlay window to extend directly across the status bar and display cutout without being clipped or hidden by Android OS.
+            - **ContextThemeWrapper**: Ensures view hierarchy inflation receives full theme metrics and dimensions.
+            - **Single-Attach Guard**: Eliminates WindowManager token collisions.
+            - **One-Tap "FORCE SHOW ISLAND ON SCREEN"**: Dedicated dashboard button instantly renders the Dynamic Island on screen with active coordinates.
+            - **Always-On-Screen Standby Mode**: High contrast Nothing pill with crimson dot (`●`) and NDot57 dot-matrix typography.
+            - **Spotify Zero-Crash & Live Real-Time Equalizer**: Real Spotify logo and 4-column dot-matrix visualizer.
 
             ### 📦 Direct Download
-            **[Nothing-Island-v1.0.5.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.5/Nothing-Island-v1.0.5.apk)**
+            **[Nothing-Island-v1.0.6.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.6/Nothing-Island-v1.0.6.apk)**

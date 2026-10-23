@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnTestMusic: Button
     private lateinit var btnTestCharging: Button
     private lateinit var btnTestNotification: Button
+    private lateinit var btnForceShowIsland: Button
 
     // Permissions
     private lateinit var cardOverlayPermission: LinearLayout
@@ -104,7 +105,7 @@ class MainActivity : AppCompatActivity() {
             switchMasterIsland.isChecked = true
             headerStatusText.text = "NOTHING OS 3.0 // ACTIVE"
             headerStatusText.setTextColor(Color.parseColor("#D71920"))
-            IslandOverlayManager.showOverlay(applicationContext)
+            IslandOverlayManager.showOverlay(this)
             startIslandServiceSafely()
         }
     }
@@ -125,6 +126,7 @@ class MainActivity : AppCompatActivity() {
         btnTestMusic = findViewById(R.id.btnTestMusic)
         btnTestCharging = findViewById(R.id.btnTestCharging)
         btnTestNotification = findViewById(R.id.btnTestNotification)
+        btnForceShowIsland = findViewById(R.id.btnForceShowIsland)
 
         cardOverlayPermission = findViewById(R.id.cardOverlayPermission)
         badgeOverlayPermission = findViewById(R.id.badgeOverlayPermission)
@@ -161,7 +163,8 @@ class MainActivity : AppCompatActivity() {
             sectionPreviewTitle,
             islandStateBadge,
             simLeftText,
-            simRightText
+            simRightText,
+            btnForceShowIsland
         )
     }
 
@@ -174,7 +177,7 @@ class MainActivity : AppCompatActivity() {
             )
             if (isChecked) {
                 if (Settings.canDrawOverlays(this)) {
-                    IslandOverlayManager.showOverlay(applicationContext)
+                    IslandOverlayManager.showOverlay(this)
                     startIslandServiceSafely()
                 } else {
                     requestOverlayPermission()
@@ -210,6 +213,24 @@ class MainActivity : AppCompatActivity() {
         btnTestNotification.setOnClickListener {
             NothingHapticHelper.vibrateTick(it)
             simulateNotificationIsland()
+        }
+
+        btnForceShowIsland.setOnClickListener {
+            NothingHapticHelper.vibratePop(this)
+            if (!Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, "Please grant Display Over Other Apps permission first", Toast.LENGTH_SHORT).show()
+                requestOverlayPermission()
+            } else {
+                prefs.isEnabled = true
+                switchMasterIsland.isChecked = true
+                IslandOverlayManager.showOverlay(this)
+                startIslandServiceSafely()
+                Toast.makeText(
+                    this,
+                    "🔴 (NOT) ISLAND Active! Y: ${prefs.yOffset}dp (Top Center)",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
 
         // Presets
