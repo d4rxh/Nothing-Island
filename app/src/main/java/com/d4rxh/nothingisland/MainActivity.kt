@@ -453,9 +453,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 101) {
+            updatePermissionBadges()
+            if (Settings.canDrawOverlays(this)) {
+                startIslandServiceSafely()
+            }
+        }
+    }
+
     private fun startIslandServiceSafely() {
         try {
-            startService(Intent(this, IslandOverlayService::class.java))
+            val intent = Intent(this, IslandOverlayService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                androidx.core.content.ContextCompat.startForegroundService(this, intent)
+            } else {
+                startService(intent)
+            }
         } catch (e: Exception) {
             Log.e("MainActivity", "startService caught: ${e.message}", e)
         }

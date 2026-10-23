@@ -5,6 +5,9 @@
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
@@ -27,11 +30,16 @@
             </intent-filter>
         </activity>
 
-        <!-- Floating Overlay Island Service (Runs as safe standard sticky overlay service) -->
+        <!-- Floating Overlay Island Service (Android 14/15 Compliant 24/7 Foreground Service) -->
         <service
             android:name=".service.IslandOverlayService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Floating camera punch-hole dynamic island status overlay" />
+        </service>
 
         <!-- Notification & Media Session Listener -->
         <service

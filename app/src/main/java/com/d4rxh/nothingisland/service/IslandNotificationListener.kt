@@ -9,6 +9,7 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.service.notification.NotificationListenerService
@@ -51,7 +52,12 @@ class IslandNotificationListener : NotificationListenerService() {
 
             // Ensure Dynamic Island is ALWAYS ON SCREEN
             IslandOverlayManager.showOverlay(this)
-            startService(Intent(this, IslandOverlayService::class.java))
+            val serviceIntent = Intent(this, IslandOverlayService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                androidx.core.content.ContextCompat.startForegroundService(this, serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
         } catch (e: Exception) {
             Log.e("NotificationListener", "Failed in onListenerConnected: ${e.message}", e)
         }

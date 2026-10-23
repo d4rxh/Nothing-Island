@@ -141,12 +141,10 @@ object IslandOverlayManager {
         btnNext = view.findViewById(R.id.btnNext)
         expandedNotificationBody = view.findViewById(R.id.expandedNotificationBody)
 
-        TypefaceHelper.applyNdot(
-            compactLeftText ?: return,
-            compactRightText ?: return,
-            expandedSourceAppText ?: return,
-            expandedTitleText ?: return
-        )
+        compactLeftText?.let { TypefaceHelper.applyNdot(it) }
+        compactRightText?.let { TypefaceHelper.applyNdot(it) }
+        expandedSourceAppText?.let { TypefaceHelper.applyNdot(it) }
+        expandedTitleText?.let { TypefaceHelper.applyNdot(it) }
 
         applyCustomStyling(context)
         setupInteractions(context)
