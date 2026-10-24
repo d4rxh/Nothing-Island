@@ -273,7 +273,7 @@ object IslandOverlayManager {
             wm.defaultDisplay?.rotation ?: Surface.ROTATION_0
         }
 
-        val targetY = if (prefs.attachToTop) 0 else dpToPx(context, prefs.yOffset)
+        val targetY = if (prefs.attachToTop) -dpToPx(context, 3) else dpToPx(context, prefs.yOffset)
         val targetX = dpToPx(context, prefs.xOffset)
 
         val insets = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -297,15 +297,16 @@ object IslandOverlayManager {
         val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270
 
         if (isLandscape) {
+            val edgeY = if (prefs.attachToTop) -dpToPx(context, 3) else targetY
             if (rotation == Surface.ROTATION_90) {
                 // Landscape gaming mode: camera notch on the LEFT edge
                 params.gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                params.x = targetY
+                params.x = edgeY
                 params.y = targetX
             } else {
                 // Reverse landscape: camera notch on the RIGHT edge
                 params.gravity = Gravity.END or Gravity.CENTER_VERTICAL
-                params.x = targetY
+                params.x = edgeY
                 params.y = -targetX
             }
 
@@ -316,11 +317,12 @@ object IslandOverlayManager {
                 islandCapsule?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
             } else {
                 // Vertically hug the camera punch-hole along the short edge (portrait-style along the notch)
+                val landscapeThickness = dpToPx(context, prefs.islandHeight)
                 islandContainerRow?.orientation = LinearLayout.VERTICAL
-                islandCapsule?.layoutParams?.width = dpToPx(context, 38)
+                islandCapsule?.layoutParams?.width = landscapeThickness
                 islandCapsule?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
                 compactContainer?.orientation = LinearLayout.VERTICAL
-                compactContainer?.layoutParams?.width = dpToPx(context, 38)
+                compactContainer?.layoutParams?.width = landscapeThickness
                 compactContainer?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
                 compactContainer?.setPadding(dpToPx(context, 4), dpToPx(context, 8), dpToPx(context, 4), dpToPx(context, 8))
                 islandSubCapsule?.layoutParams?.let { lp ->
@@ -335,7 +337,10 @@ object IslandOverlayManager {
             params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             // Pure center alignment (offset only by user setting prefs.xOffset)
             params.x = targetX
-            params.y = if (prefs.attachToTop) 0 else if (bounds != null && bounds.isNotEmpty()) bounds[0].top else targetY
+            params.y = if (prefs.attachToTop) -dpToPx(context, 3) else if (bounds != null && bounds.isNotEmpty()) bounds[0].top else targetY
+
+            val extraHeight = if (prefs.attachToTop) dpToPx(context, 7) else 0
+            val topPadding = if (prefs.attachToTop) dpToPx(context, 4) else 0
 
             // Horizontally hug the camera punch-hole along the top edge
             islandContainerRow?.orientation = LinearLayout.HORIZONTAL
@@ -343,8 +348,8 @@ object IslandOverlayManager {
             islandCapsule?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
             compactContainer?.orientation = LinearLayout.HORIZONTAL
             compactContainer?.layoutParams?.width = ViewGroup.LayoutParams.WRAP_CONTENT
-            compactContainer?.layoutParams?.height = dpToPx(context, 38)
-            compactContainer?.setPadding(dpToPx(context, 10), 0, dpToPx(context, 10), 0)
+            compactContainer?.layoutParams?.height = dpToPx(context, prefs.islandHeight) + extraHeight
+            compactContainer?.setPadding(dpToPx(context, 10), topPadding, dpToPx(context, 10), 0)
             islandSubCapsule?.layoutParams?.let { lp ->
                 if (lp is ViewGroup.MarginLayoutParams) {
                     lp.topMargin = 0
@@ -561,7 +566,7 @@ object IslandOverlayManager {
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
 
-        val targetY = if (prefs.attachToTop) 0 else dpToPx(context, prefs.yOffset)
+        val targetY = if (prefs.attachToTop) -dpToPx(context, 3) else dpToPx(context, prefs.yOffset)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -650,7 +655,14 @@ object IslandOverlayManager {
             }
             capsule.background = bgDrawable
 
-            val extraHeight = if (prefs.attachToTop) dpToPx(context, 6) else 0
+            // Eliminate upward elevation shadow when flush-attached against the top bezel
+            if (prefs.attachToTop) {
+                capsule.elevation = 0f
+            } else {
+                capsule.elevation = dpToPx(context, 8).toFloat()
+            }
+
+            val extraHeight = if (prefs.attachToTop) dpToPx(context, 7) else 0
             val topPadding = if (prefs.attachToTop) dpToPx(context, 4) else 0
 
             compactContainer?.setPadding(
@@ -993,7 +1005,7 @@ object IslandOverlayManager {
 
         layoutParams?.let { params ->
             params.x = dpToPx(context, xOffset)
-            params.y = if (prefs.attachToTop) 0 else dpToPx(context, yOffset)
+            params.y = if (prefs.attachToTop) -dpToPx(context, 3) else dpToPx(context, yOffset)
             try {
                 windowManager?.updateViewLayout(view, params)
             } catch (e: Exception) {
@@ -1608,6 +1620,9 @@ object IslandOverlayManager {
 
         try {
             updateSplitPillState()
+            if (state != State.EXPANDED) {
+                applyCustomStyling(context)
+            }
             when (state) {
                 State.IDLE -> {
                     compactContainer?.visibility = View.VISIBLE

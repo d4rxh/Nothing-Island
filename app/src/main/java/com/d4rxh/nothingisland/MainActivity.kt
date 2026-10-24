@@ -409,9 +409,9 @@ class MainActivity : AppCompatActivity() {
         // Update dimensions & margins for Attached to Top Bezel
         val lp = simulatedIsland.layoutParams as? android.widget.FrameLayout.LayoutParams
         if (lp != null) {
-            val extraHeight = if (prefs.attachToTop) (6 * density).toInt() else 0
+            val extraHeight = if (prefs.attachToTop) (7 * density).toInt() else 0
             lp.height = (prefs.islandHeight * density).toInt() + extraHeight
-            lp.topMargin = if (prefs.attachToTop) 0 else (14 * density).toInt()
+            lp.topMargin = if (prefs.attachToTop) -(3 * density).toInt() else (14 * density).toInt()
             simulatedIsland.layoutParams = lp
         }
         simulatedIsland.minimumWidth = (prefs.islandWidth * density).toInt()
