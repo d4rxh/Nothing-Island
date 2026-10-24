@@ -87,6 +87,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var switchVolumeHud: MaterialSwitch
     private lateinit var switchBlacklist: MaterialSwitch
     private lateinit var switchBatteryAlerts: MaterialSwitch
+    private lateinit var switchRespectDnd: MaterialSwitch
+    private lateinit var switchTouchOutside: MaterialSwitch
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -173,6 +175,8 @@ class MainActivity : AppCompatActivity() {
         switchVolumeHud = findViewById(R.id.switchVolumeHud)
         switchBlacklist = findViewById(R.id.switchBlacklist)
         switchBatteryAlerts = findViewById(R.id.switchBatteryAlerts)
+        switchRespectDnd = findViewById(R.id.switchRespectDnd)
+        switchTouchOutside = findViewById(R.id.switchTouchOutside)
     }
 
     private fun setupTypography() {
@@ -369,6 +373,14 @@ class MainActivity : AppCompatActivity() {
         switchBatteryAlerts.setOnCheckedChangeListener { _, isChecked ->
             prefs.batteryAlertsEnabled = isChecked
         }
+
+        switchRespectDnd.setOnCheckedChangeListener { _, isChecked ->
+            prefs.respectDnd = isChecked
+        }
+
+        switchTouchOutside.setOnCheckedChangeListener { _, isChecked ->
+            prefs.touchOutsideToCollapse = isChecked
+        }
     }
 
     private fun applyPreset(x: Int, y: Int, width: Int, height: Int, radius: Int, cutout: Int) {
@@ -488,6 +500,8 @@ class MainActivity : AppCompatActivity() {
         switchVolumeHud.isChecked = prefs.volumeHudEnabled
         switchBlacklist.isChecked = prefs.isBlacklistEnabled
         switchBatteryAlerts.isChecked = prefs.batteryAlertsEnabled
+        switchRespectDnd.isChecked = prefs.respectDnd
+        switchTouchOutside.isChecked = prefs.touchOutsideToCollapse
     }
 
     private fun updatePermissionBadges() {

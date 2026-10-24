@@ -39,34 +39,42 @@ jobs:
       - name: Prepare APK for Artifact & Release
         run: |
           mkdir -p build-output
-          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.17.apk
+          TAG_NAME="${{ github.ref_name }}"
+          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "main" ]; then
+            TAG_NAME="latest"
+          fi
+          cp app/build/outputs/apk/release/app-release.apk "build-output/Nothing-Island-${TAG_NAME}.apk"
           ls -la build-output/
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Nothing-Island-v1.0.17
-          path: build-output/Nothing-Island-v1.0.17.apk
+          name: Nothing-Island-release-apk
+          path: build-output/Nothing-Island-*.apk
           retention-days: 14
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          name: Nothing Island v1.0.17 (Voice Recorder, System Clock/Stopwatch, Clean Screenshot Gesture, Reliable Calls & Glitch-Free Charging)
+          name: Nothing Island ${{ github.ref_name }} (Complete dynamicSpot Parity: Interactive Touch Seekbar, Action Pills, Volume HUD, Outside-Touch Collapse & DND)
           tag_name: ${{ github.ref_name }}
-          files: build-output/Nothing-Island-v1.0.17.apk
+          files: build-output/Nothing-Island-*.apk
           draft: false
           prerelease: false
           body: |
-            ## Nothing Island v1.0.17 Release
+            ## Nothing Island ${{ github.ref_name }} — Complete dynamicSpot Parity Release
 
-            ### What's New & Fixed:
-            - **Voice Recorder & System Stopwatch/Timer Support**: Real-time integration with Nothing Sound Recorder, Google Recorder, Google Clock, and system clock apps. Shows running recording duration with a pulsing red LED indicator and countdown/stopwatch timers right in the pill.
-            - **Clean Screenshot Gesture (Zero Island in Screenshots)**: Swipe UP or double-tap on the island to momentarily hide it for 6 seconds, allowing you to take 100% clean screenshots without the island overlay getting captured.
-            - **Glitch-Free YouTube & Charging**: Fixed charging banner popping up during YouTube playback. Charging alert now only flashes briefly upon initial cable connection (for 3.5s) and never interrupts active video or media.
-            - **Multi-Notification Stability**: Fixed dynamic island collapsing or mixing up messages when multiple notifications arrive in rapid succession.
-            - **Reliable Incoming & Ongoing Calls**: Added direct TelephonyManager state listener alongside Notification CallStyle parser for 100% reliable detection of incoming/active phone calls and VoIP calls (WhatsApp, Truecaller).
+            All major features of dynamicSpot reverse-engineered, optimized, and natively rebuilt for Nothing OS (Android 14/15) with zero tracking and pure OLED dot-matrix aesthetics.
 
-            ### Direct APK Download
-            **[Nothing-Island-v1.0.17.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.17/Nothing-Island-v1.0.17.apk)**
+            ### What's New:
+            - **Interactive Touch & Scrub Media Seekbar**: Directly scrub through active Spotify/YouTube Music tracks right inside the expanded island card with real-time elapsed/duration timers.
+            - **Dynamic Notification Action Pills**: WhatsApp "Mark as Read", Gmail "Archive", Quick Reply, and custom actions rendered as authentic Nothing pills.
+            - **Touch Outside to Collapse**: Tap anywhere outside the expanded island card to instantly dismiss it back to compact pill (`FLAG_WATCH_OUTSIDE_TOUCH`).
+            - **Long-Press Capsule Gesture**: Long-press compact pill to instantly toggle playback or open source app.
+            - **Do Not Disturb (DND) Filter**: Respects system Zen Mode and DND—no intrusive popups during focus sessions or gaming.
+            - **Dynamic Volume HUD Pill**: Physical volume button presses trigger a sleek 1.8s volume status pill.
+            - **Dual Island Split Pill**: Real-time dual island capsules for simultaneous Music + Charging, Timer, or Calls.
+            - **App Blacklist / Game Mode**: Temporarily hides overlay inside camera, YouTube full-screen, and games.
+            - **Battery Alerts**: Smart alerts for Low Battery (<=15%) and Full Battery (100%).
+            - **Configurable Auto-Hide Timeout**: Choose notification banner visibility duration (2s - 15s).

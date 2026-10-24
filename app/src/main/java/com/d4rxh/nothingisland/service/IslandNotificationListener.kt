@@ -1,5 +1,6 @@
 package com.d4rxh.nothingisland.service
 
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
@@ -16,6 +17,7 @@ import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.d4rxh.nothingisland.data.IslandPreferences
 
 class IslandNotificationListener : NotificationListenerService() {
 
@@ -170,6 +172,17 @@ class IslandNotificationListener : NotificationListenerService() {
         super.onNotificationPosted(sbn)
         try {
             if (sbn == null || sbn.packageName == packageName) return
+
+            val prefs = IslandPreferences(this)
+            if (prefs.respectDnd && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                val filter = nm?.currentInterruptionFilter ?: NotificationManager.INTERRUPTION_FILTER_ALL
+                if (filter != NotificationManager.INTERRUPTION_FILTER_ALL &&
+                    filter != NotificationManager.INTERRUPTION_FILTER_UNKNOWN) {
+                    // Respect Do Not Disturb (DND): skip popups
+                    return
+                }
+            }
 
             // Ignore system notifications spam & noisy background updates
             val ignoredPackages = setOf(

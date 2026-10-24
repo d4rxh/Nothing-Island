@@ -94,10 +94,29 @@ class IslandPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_VOLUME_HUD_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_VOLUME_HUD_ENABLED, value).apply()
 
+    var respectDnd: Boolean
+        get() = prefs.getBoolean(KEY_RESPECT_DND, true)
+        set(value) = prefs.edit().putBoolean(KEY_RESPECT_DND, value).apply()
+
+    var touchOutsideToCollapse: Boolean
+        get() = prefs.getBoolean(KEY_TOUCH_OUTSIDE_TO_COLLAPSE, true)
+        set(value) = prefs.edit().putBoolean(KEY_TOUCH_OUTSIDE_TO_COLLAPSE, value).apply()
+
+    var autoHideTimeoutSec: Int
+        get() = prefs.getInt(KEY_AUTO_HIDE_TIMEOUT_SEC, 4)
+        set(value) = prefs.edit().putInt(KEY_AUTO_HIDE_TIMEOUT_SEC, value).apply()
+
+    var longPressAction: Int
+        get() = prefs.getInt(KEY_LONG_PRESS_ACTION, LONG_PRESS_TOGGLE_OR_OPEN)
+        set(value) = prefs.edit().putInt(KEY_LONG_PRESS_ACTION, value).apply()
+
     companion object {
         const val ALIGNMENT_CENTER = 0
         const val ALIGNMENT_LEFT = 1
         const val ALIGNMENT_RIGHT = 2
+
+        const val LONG_PRESS_TOGGLE_OR_OPEN = 0
+        const val LONG_PRESS_EXPAND = 1
 
         private val DEFAULT_BLACKLIST = setOf(
             "com.google.android.youtube",
@@ -127,5 +146,9 @@ class IslandPreferences(context: Context) {
         private const val KEY_BATTERY_ALERTS_ENABLED = "pref_battery_alerts_enabled"
         private const val KEY_MEDIA_SEEKBAR_ENABLED = "pref_media_seekbar_enabled"
         private const val KEY_VOLUME_HUD_ENABLED = "pref_volume_hud_enabled"
+        private const val KEY_RESPECT_DND = "pref_respect_dnd"
+        private const val KEY_TOUCH_OUTSIDE_TO_COLLAPSE = "pref_touch_outside_to_collapse"
+        private const val KEY_AUTO_HIDE_TIMEOUT_SEC = "pref_auto_hide_timeout_sec"
+        private const val KEY_LONG_PRESS_ACTION = "pref_long_press_action"
     }
 }

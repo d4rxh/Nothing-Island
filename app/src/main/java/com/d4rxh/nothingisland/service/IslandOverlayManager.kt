@@ -764,6 +764,28 @@ object IslandOverlayManager {
             temporarilyHideIsland(6000)
         }
 
+        // Long Press on island (dynamicSpot parity: toggle playback or open active app)
+        islandRoot?.onIslandLongPress = {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(context)
+            if (prefs.longPressAction == IslandPreferences.LONG_PRESS_EXPAND) {
+                expandIsland()
+            } else {
+                if (isMusicPlaying) {
+                    IslandMediaManager.togglePlayPause()
+                } else {
+                    handleExpandedCardClick(context)
+                }
+            }
+        }
+
+        // Outside touch to collapse card immediately (dynamicSpot parity)
+        islandRoot?.onOutsideTouch = {
+            if (prefs.touchOutsideToCollapse && currentState == State.EXPANDED) {
+                if (prefs.hapticsEnabled) overlayView?.let { v -> NothingHapticHelper.vibrateTick(v) }
+                collapseIsland()
+            }
+        }
+
         islandRoot?.onOrientationChanged = {
             onOrientationChanged()
         }
@@ -1801,12 +1823,13 @@ object IslandOverlayManager {
 
                 updateState(State.NOTIFICATION_COMPACT)
 
-                // Auto dismiss notification banner after 6.0 seconds and revert to music or charging
+                // Auto dismiss notification banner after configured timeout (default 4.0s) and revert to music or charging
+                val timeoutSec = prefs.autoHideTimeoutSec.coerceIn(2, 15)
                 notificationDismissRunnable = Runnable {
                     clearActiveNotification()
                     dismissNotificationAndRestore()
                 }
-                mainHandler.postDelayed(notificationDismissRunnable!!, 6000)
+                mainHandler.postDelayed(notificationDismissRunnable!!, timeoutSec * 1000L)
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onNotificationReceived: ${e.message}", e)
             }
@@ -2014,6 +2037,11 @@ object IslandOverlayManager {
                 applyStateVisibilities(newState)
 
                 layoutParams?.let { params ->
+                    if (newState == State.EXPANDED && prefs.touchOutsideToCollapse) {
+                        params.flags = params.flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                    } else {
+                        params.flags = params.flags and WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH.inv()
+                    }
                     windowManager?.updateViewLayout(view, params)
                 }
                 view.requestLayout()
