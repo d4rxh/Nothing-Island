@@ -116,9 +116,18 @@ object IslandOverlayManager {
     private var isBatteryReceiverRegistered = false
     private var displayListener: DisplayManager.DisplayListener? = null
 
+    // Active notification persistence
+    private var activeNotificationAppName = ""
+    private var activeNotificationTitle = ""
+    private var activeNotificationContent = ""
+    private var activeNotificationPackage = ""
+    private var activeNotificationIcon: Drawable? = null
+    private var hasActiveNotification = false
+
     // Auto dismiss notification runnable
     private var notificationDismissRunnable: Runnable? = null
     private var pausedTimeoutRunnable: Runnable? = null
+    private var cricketExpirationRunnable: Runnable? = null
 
     fun getCurrentState(): State = currentState
     fun getCurrentMediaPackage(): String = currentPackageName
@@ -171,15 +180,18 @@ object IslandOverlayManager {
                     (level * 100) / scale
                 } else {
                     val bm = ctx?.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
-                    bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 85
+                    bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: currentBatteryPercent
                 }
 
                 if (action == Intent.ACTION_POWER_CONNECTED || (isCharging && lastIsCharging != true)) {
                     lastIsCharging = true
-                    onChargingChanged(true, percent)
+                    onChargingChanged(true, percent, isFirstConnect = true)
                 } else if (action == Intent.ACTION_POWER_DISCONNECTED || (!isCharging && lastIsCharging == true)) {
                     lastIsCharging = false
-                    onChargingChanged(false, percent)
+                    onChargingChanged(false, percent, isFirstConnect = false)
+                } else if (isCharging) {
+                    // LIVE UPDATE: Update percentage in real time as battery charges!
+                    onChargingChanged(true, percent, isFirstConnect = false)
                 }
             }
         }
@@ -528,10 +540,25 @@ object IslandOverlayManager {
             collapseIsland()
         }
 
-        // Tapping expanded artwork launches the media player app (Spotify / YT Music)
+        // Tapping expanded artwork or notification body launches the app (WhatsApp / Spotify / etc.)
         expandedArtwork?.setOnClickListener {
             if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
-            openSourcePlayerApp(context)
+            handleExpandedCardClick(context)
+        }
+
+        expandedNotificationBody?.setOnClickListener {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
+            handleExpandedCardClick(context)
+        }
+
+        expandedTitleText?.setOnClickListener {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
+            handleExpandedCardClick(context)
+        }
+
+        expandedArtistText?.setOnClickListener {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
+            handleExpandedCardClick(context)
         }
 
         // Media controls in expanded state
@@ -548,6 +575,29 @@ object IslandOverlayManager {
         btnNext?.setOnClickListener {
             if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
             IslandMediaManager.skipNext()
+        }
+    }
+
+    private fun handleExpandedCardClick(context: Context) {
+        if (hasActiveNotification && activeNotificationPackage.isNotEmpty()) {
+            try {
+                val launchIntent = context.packageManager.getLaunchIntentForPackage(activeNotificationPackage)
+                launchIntent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (launchIntent != null) {
+                    context.startActivity(launchIntent)
+                    hasActiveNotification = false
+                    collapseIsland()
+                    return
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error opening notification app: ${e.message}")
+            }
+        }
+
+        if (currentPackageName.isNotEmpty()) {
+            openSourcePlayerApp(context)
+        } else {
+            collapseIsland()
         }
     }
 
@@ -570,6 +620,9 @@ object IslandOverlayManager {
         if (currentState == State.EXPANDED) {
             collapseIsland()
         } else {
+            // Cancel notification auto-dismiss timer so user has time to read
+            notificationDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+            notificationDismissRunnable = null
             expandIsland()
         }
     }
@@ -721,7 +774,7 @@ object IslandOverlayManager {
         }
     }
 
-    fun onChargingChanged(isCharging: Boolean, batteryPercent: Int) {
+    fun onChargingChanged(isCharging: Boolean, batteryPercent: Int, isFirstConnect: Boolean = false) {
         val context = appContext ?: return
         val prefs = IslandPreferences(context)
         if (!prefs.chargingIslandEnabled) return
@@ -732,35 +785,41 @@ object IslandOverlayManager {
         mainHandler.post {
             try {
                 if (isCharging) {
-                    if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(context)
-
-                    compactLeftIcon?.setImageResource(R.drawable.ic_bolt)
-                    compactLeftIcon?.visibility = View.VISIBLE
-                    compactLeftText?.visibility = View.GONE
-
-                    centerCutoutSpacer?.visibility = View.VISIBLE
-
-                    compactRightText?.text = "$batteryPercent%"
-                    compactRightText?.visibility = View.VISIBLE
-
-                    // STOP and HIDE equalizer during charging
-                    compactEqualizer?.isPlaying = false
-                    compactEqualizer?.visibility = View.GONE
-
                     expandedAppIcon?.setImageResource(R.drawable.ic_bolt)
                     expandedSourceAppText?.text = "FAST CHARGING // GLYPH"
                     expandedTitleText?.text = "BATTERY CHARGING"
                     expandedArtistText?.text = "$batteryPercent% • Connected to Power"
                     expandedNotificationBody?.text = "$batteryPercent% • Connected to Power"
 
-                    updateState(State.CHARGING_COMPACT)
+                    if (currentState == State.CHARGING_COMPACT) {
+                        compactRightText?.text = "$batteryPercent%"
+                    }
 
-                    // Auto revert back to MUSIC or IDLE after 4.5 seconds
-                    mainHandler.postDelayed({
-                        if (currentState == State.CHARGING_COMPACT) {
-                            restorePreviousMediaOrIdle()
-                        }
-                    }, 4500)
+                    if (isFirstConnect) {
+                        if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(context)
+
+                        compactLeftIcon?.setImageResource(R.drawable.ic_bolt)
+                        compactLeftIcon?.visibility = View.VISIBLE
+                        compactLeftText?.visibility = View.GONE
+
+                        centerCutoutSpacer?.visibility = View.VISIBLE
+
+                        compactRightText?.text = "$batteryPercent%"
+                        compactRightText?.visibility = View.VISIBLE
+
+                        // STOP and HIDE equalizer during charging
+                        compactEqualizer?.isPlaying = false
+                        compactEqualizer?.visibility = View.GONE
+
+                        updateState(State.CHARGING_COMPACT)
+
+                        // Auto revert back to MUSIC or IDLE after 4.5 seconds
+                        mainHandler.postDelayed({
+                            if (currentState == State.CHARGING_COMPACT) {
+                                restorePreviousMediaOrIdle()
+                            }
+                        }, 4500)
+                    }
                 } else {
                     if (currentState == State.CHARGING_COMPACT) {
                         restorePreviousMediaOrIdle()
@@ -776,17 +835,25 @@ object IslandOverlayManager {
         appName: String,
         title: String,
         content: String,
-        appIcon: Drawable?
+        appIcon: Drawable?,
+        packageName: String = ""
     ) {
         val context = appContext ?: return
         val prefs = IslandPreferences(context)
         if (!prefs.notificationIslandEnabled) return
 
+        activeNotificationAppName = appName
+        activeNotificationTitle = title
+        activeNotificationContent = content
+        activeNotificationPackage = packageName
+        activeNotificationIcon = appIcon
+        hasActiveNotification = true
+
         mainHandler.post {
             try {
                 notificationDismissRunnable?.let { mainHandler.removeCallbacks(it) }
 
-                // 1. Compact View: App Icon + Sender Name
+                // 1. Compact View: App Icon + preview snippet
                 if (appIcon != null) {
                     compactLeftIcon?.setImageDrawable(appIcon)
                 } else {
@@ -795,7 +862,12 @@ object IslandOverlayManager {
                 compactLeftIcon?.visibility = View.VISIBLE
                 compactLeftText?.visibility = View.GONE
 
-                compactRightText?.text = title.take(10)
+                val snippet = when {
+                    title.isNotEmpty() && content.isNotEmpty() -> "$title: $content"
+                    title.isNotEmpty() -> title
+                    else -> content
+                }
+                compactRightText?.text = snippet
                 compactRightText?.visibility = View.VISIBLE
 
                 // CRITICAL BUG FIX: Force stop & hide equalizer animation during notifications!
@@ -816,20 +888,21 @@ object IslandOverlayManager {
                     expandedArtwork?.visibility = View.GONE
                 }
 
-                expandedSourceAppText?.text = appName.uppercase()
-                expandedTitleText?.text = title
-                expandedArtistText?.text = content
+                expandedSourceAppText?.text = "${appName.uppercase()} // NOTIFICATION"
+                expandedTitleText?.text = title.ifEmpty { appName }
+                expandedArtistText?.text = "Tap to open ${appName.ifEmpty { "App" }}"
                 mediaControlsRow?.visibility = View.GONE
                 expandedNotificationBody?.visibility = View.VISIBLE
-                expandedNotificationBody?.text = content
+                expandedNotificationBody?.text = if (content.isNotEmpty()) content else title
 
                 updateState(State.NOTIFICATION_COMPACT)
 
-                // Auto dismiss notification banner after exactly 4.0 seconds and revert to music
+                // Auto dismiss notification banner after 6.0 seconds and revert to music
                 notificationDismissRunnable = Runnable {
+                    hasActiveNotification = false
                     dismissNotificationAndRestore()
                 }
-                mainHandler.postDelayed(notificationDismissRunnable!!, 4000)
+                mainHandler.postDelayed(notificationDismissRunnable!!, 6000)
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onNotificationReceived: ${e.message}", e)
             }
@@ -837,6 +910,10 @@ object IslandOverlayManager {
     }
 
     fun onNotificationDismissed() {
+        hasActiveNotification = false
+        activeNotificationTitle = ""
+        activeNotificationContent = ""
+        activeNotificationPackage = ""
         mainHandler.post {
             dismissNotificationAndRestore()
         }
@@ -864,6 +941,19 @@ object IslandOverlayManager {
         currentCricketScore = scoreText
         currentCricketAppName = appName
         currentCricketAppIcon = appIcon
+
+        cricketExpirationRunnable?.let { mainHandler.removeCallbacks(it) }
+        // Auto-expire cricket score after 60 seconds so it doesn't stay permanently stuck
+        cricketExpirationRunnable = Runnable {
+            currentCricketScore = ""
+            currentCricketMatch = ""
+            currentCricketAppName = ""
+            currentCricketAppIcon = null
+            if (currentState == State.CRICKET_COMPACT) {
+                restorePreviousMediaOrIdle()
+            }
+        }
+        mainHandler.postDelayed(cricketExpirationRunnable!!, 60000)
 
         mainHandler.post {
             try {
@@ -1119,7 +1209,22 @@ object IslandOverlayManager {
                 State.EXPANDED -> {
                     compactContainer?.visibility = View.GONE
                     expandedContainer?.visibility = View.VISIBLE
-                    if (isMusicPlaying) {
+                    if (hasActiveNotification && (activeNotificationTitle.isNotEmpty() || activeNotificationContent.isNotEmpty())) {
+                        mediaControlsRow?.visibility = View.GONE
+                        expandedNotificationBody?.visibility = View.VISIBLE
+                        if (activeNotificationIcon != null) {
+                            expandedAppIcon?.setImageDrawable(activeNotificationIcon)
+                            expandedArtwork?.setImageDrawable(activeNotificationIcon)
+                            expandedArtwork?.visibility = View.VISIBLE
+                        } else {
+                            expandedAppIcon?.setImageResource(R.drawable.ic_bell)
+                            expandedArtwork?.visibility = View.GONE
+                        }
+                        expandedSourceAppText?.text = "${activeNotificationAppName.uppercase()} // NOTIFICATION"
+                        expandedTitleText?.text = activeNotificationTitle.ifEmpty { activeNotificationAppName }
+                        expandedArtistText?.text = "Tap to open ${activeNotificationAppName.ifEmpty { "App" }}"
+                        expandedNotificationBody?.text = if (activeNotificationContent.isNotEmpty()) activeNotificationContent else activeNotificationTitle
+                    } else if (isMusicPlaying) {
                         mediaControlsRow?.visibility = View.VISIBLE
                         expandedNotificationBody?.visibility = View.GONE
                         btnPlayPause?.setImageResource(R.drawable.ic_pause)
@@ -1165,6 +1270,7 @@ object IslandOverlayManager {
     }
 
     fun collapseIsland() {
+        hasActiveNotification = false
         restorePreviousMediaOrIdle()
     }
 

@@ -16,13 +16,13 @@ class BatteryStatusReceiver : BroadcastReceiver() {
             Intent.ACTION_POWER_CONNECTED -> {
                 val level = getBatteryPercentage(context)
                 lastCharging = true
-                IslandOverlayManager.onChargingChanged(true, level)
+                IslandOverlayManager.onChargingChanged(true, level, isFirstConnect = true)
                 IslandOverlayService.instance?.onChargingChanged(true, level)
             }
             Intent.ACTION_POWER_DISCONNECTED -> {
                 val level = getBatteryPercentage(context)
                 lastCharging = false
-                IslandOverlayManager.onChargingChanged(false, level)
+                IslandOverlayManager.onChargingChanged(false, level, isFirstConnect = false)
                 IslandOverlayService.instance?.onChargingChanged(false, level)
             }
             Intent.ACTION_BATTERY_CHANGED -> {
@@ -35,12 +35,16 @@ class BatteryStatusReceiver : BroadcastReceiver() {
 
                 if (isCharging && lastCharging != true) {
                     lastCharging = true
-                    IslandOverlayManager.onChargingChanged(true, percent)
+                    IslandOverlayManager.onChargingChanged(true, percent, isFirstConnect = true)
                     IslandOverlayService.instance?.onChargingChanged(true, percent)
                 } else if (!isCharging && lastCharging == true) {
                     lastCharging = false
-                    IslandOverlayManager.onChargingChanged(false, percent)
+                    IslandOverlayManager.onChargingChanged(false, percent, isFirstConnect = false)
                     IslandOverlayService.instance?.onChargingChanged(false, percent)
+                } else if (isCharging) {
+                    // LIVE UPDATE: e.g. 60% -> 61% -> 70% while on charger!
+                    IslandOverlayManager.onChargingChanged(true, percent, isFirstConnect = false)
+                    IslandOverlayService.instance?.onChargingChanged(true, percent)
                 }
             }
         }

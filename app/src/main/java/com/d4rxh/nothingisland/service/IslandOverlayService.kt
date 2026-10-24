@@ -122,17 +122,18 @@ class IslandOverlayService : Service() {
         )
     }
 
-    fun onChargingChanged(isCharging: Boolean, batteryPercent: Int) {
-        IslandOverlayManager.onChargingChanged(isCharging, batteryPercent)
+    fun onChargingChanged(isCharging: Boolean, batteryPercent: Int, isFirstConnect: Boolean = false) {
+        IslandOverlayManager.onChargingChanged(isCharging, batteryPercent, isFirstConnect)
     }
 
     fun onNotificationReceived(
         appName: String,
         title: String,
         content: String,
-        appIcon: Drawable?
+        appIcon: Drawable?,
+        packageName: String = ""
     ) {
-        IslandOverlayManager.onNotificationReceived(appName, title, content, appIcon)
+        IslandOverlayManager.onNotificationReceived(appName, title, content, appIcon, packageName)
     }
 
     override fun onDestroy() {

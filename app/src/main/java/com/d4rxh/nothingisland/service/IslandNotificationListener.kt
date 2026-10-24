@@ -160,6 +160,18 @@ class IslandNotificationListener : NotificationListenerService() {
         try {
             if (sbn == null || sbn.packageName == packageName) return
 
+            // Ignore system notifications spam
+            val ignoredPackages = setOf(
+                "android",
+                "com.android.systemui",
+                "com.google.android.gms"
+            )
+            if (ignoredPackages.contains(sbn.packageName)) return
+
+            // If notification is from the currently active media player, ignore so music isn't interrupted
+            val currentMediaPkg = IslandOverlayManager.getCurrentMediaPackage()
+            if (currentMediaPkg.isNotEmpty() && sbn.packageName == currentMediaPkg) return
+
             val extras = sbn.notification.extras ?: return
             val title = extras.getCharSequence("android.title")?.toString() ?: ""
             val text = extras.getCharSequence("android.text")?.toString() ?: ""
@@ -193,8 +205,8 @@ class IslandNotificationListener : NotificationListenerService() {
             }
 
             // Standard Notification (ignore ongoing notifications like foreground service sticky pins)
-            if (!sbn.isOngoing && title.isNotEmpty()) {
-                IslandOverlayManager.onNotificationReceived(appName, title, text, appIcon)
+            if (!sbn.isOngoing && (title.isNotEmpty() || text.isNotEmpty())) {
+                IslandOverlayManager.onNotificationReceived(appName, title, text, appIcon, sbn.packageName)
             }
         } catch (e: Exception) {
             Log.e("NotificationListener", "Error in onNotificationPosted: ${e.message}", e)
@@ -223,31 +235,25 @@ class IslandNotificationListener : NotificationListenerService() {
     private fun isCricketOrSportsNotification(packageName: String, title: String, text: String): Boolean {
         val sportsPackages = setOf(
             "com.cricbuzz.android",
-            "com.google.android.googlequicksearchbox",
-            "in.startv.hotstar",
-            "com.jio.media.ondemand",
-            "com.jio.cinema",
-            "com.fancode",
             "com.espncricinfo",
             "org.crex.app",
-            "com.sportskeeda",
-            "com.onefootball.score"
+            "com.sportskeeda"
         )
         val combined = "$title $text".lowercase()
+        val cricketScoreRegex = Regex("""\b\d{1,3}/\d{1,2}\b""")
 
         if (sportsPackages.contains(packageName)) {
             // Check if it looks like a score or match
             val hasScoreIndicators = combined.contains(" vs ") || combined.contains(" v ") ||
-                    combined.contains("/") || combined.contains("ov") || combined.contains("run") ||
-                    combined.contains("inn") || combined.contains("target")
+                    cricketScoreRegex.containsMatchIn(combined) || combined.contains("ov") || combined.contains("target")
             if (hasScoreIndicators) return true
         }
 
         // Generic pattern for sports notifications with cricket score pattern like "184/3" or "45/1"
-        val hasCricketKeywords = combined.contains("cricket") || combined.contains(" vs ") ||
+        val hasCricketKeywords = combined.contains("cricket") ||
                 combined.contains(" csk ") || combined.contains(" rcb ") || combined.contains(" mi ") ||
                 combined.contains(" ind ") || combined.contains(" aus ") || combined.contains(" eng ")
-        val hasScorePattern = Regex("""\d+/\d+|\d+-\d+""").containsMatchIn(combined)
+        val hasScorePattern = cricketScoreRegex.containsMatchIn(combined)
 
         return hasCricketKeywords && hasScorePattern
     }
