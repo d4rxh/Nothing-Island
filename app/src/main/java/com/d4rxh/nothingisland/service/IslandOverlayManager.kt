@@ -656,7 +656,7 @@ object IslandOverlayManager {
     private fun handleIslandTap() {
         val context = appContext ?: return
         val prefs = IslandPreferences(context)
-        if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(overlayView)
+        if (prefs.hapticsEnabled) overlayView?.let { NothingHapticHelper.vibrateTick(it) }
 
         // If a notification is active, clicking the island capsule OPENS the notifying app immediately!
         if (hasActiveNotification) {
