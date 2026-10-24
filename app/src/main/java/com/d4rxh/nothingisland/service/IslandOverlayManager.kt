@@ -59,6 +59,7 @@ object IslandOverlayManager {
 
     // UI references
     private var islandRoot: IslandRootLayout? = null
+    private var islandContainerRow: LinearLayout? = null
     private var islandCapsule: LinearLayout? = null
     private var compactContainer: LinearLayout? = null
     private var compactLeftContainer: FrameLayout? = null
@@ -372,6 +373,7 @@ object IslandOverlayManager {
         overlayView = view
 
         islandRoot = view.findViewById(R.id.islandRoot)
+        islandContainerRow = view.findViewById(R.id.islandContainerRow)
         islandCapsule = view.findViewById(R.id.islandCapsule)
         compactContainer = view.findViewById(R.id.compactContainer)
         compactLeftContainer = view.findViewById(R.id.compactLeftContainer)
@@ -468,6 +470,13 @@ object IslandOverlayManager {
             }
         }
         overlayView = null
+        islandRoot = null
+        islandContainerRow = null
+        islandCapsule = null
+        compactContainer = null
+        islandSubCapsule = null
+        subCapsuleIcon = null
+        subCapsuleText = null
         isAttached = false
     }
 
