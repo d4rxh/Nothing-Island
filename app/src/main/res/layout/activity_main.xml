@@ -238,7 +238,7 @@
                         android:layout_weight="1"
                         android:backgroundTint="#1C1C1C"
                         android:padding="0dp"
-                        android:text="🎵 MUSIC"
+                        android:text="MUSIC"
                         android:textColor="@color/nothing_white"
                         android:textSize="10sp"
                         android:textStyle="bold" />
@@ -252,7 +252,7 @@
                         android:layout_weight="1"
                         android:backgroundTint="#1C1C1C"
                         android:padding="0dp"
-                        android:text="⚡ CHARGE"
+                        android:text="CHARGE"
                         android:textColor="@color/nothing_white"
                         android:textSize="10sp"
                         android:textStyle="bold" />
@@ -266,7 +266,7 @@
                         android:layout_weight="1"
                         android:backgroundTint="#1C1C1C"
                         android:padding="0dp"
-                        android:text="💬 CHAT"
+                        android:text="CHAT"
                         android:textColor="@color/nothing_white"
                         android:textSize="10sp"
                         android:textStyle="bold" />
@@ -279,7 +279,7 @@
                         android:layout_weight="1"
                         android:backgroundTint="#1C1C1C"
                         android:padding="0dp"
-                        android:text="🏏 CRICKET"
+                        android:text="CRICKET"
                         android:textColor="@color/nothing_white"
                         android:textSize="10sp"
                         android:textStyle="bold" />
@@ -293,7 +293,7 @@
                     android:layout_marginTop="12dp"
                     android:backgroundTint="@color/nothing_red"
                     android:letterSpacing="0.08"
-                    android:text="🔴 FORCE SHOW ISLAND ON SCREEN"
+                    android:text="FORCE START ISLAND"
                     android:textColor="@color/nothing_white"
                     android:textSize="12sp"
                     android:textStyle="bold" />
@@ -1022,6 +1022,51 @@
 
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switchNotificationIsland"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        app:thumbTint="@color/nothing_white"
+                        app:trackTint="@color/nothing_red" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/nothing_divider" />
+
+                <!-- Landscape Auto-Hide Toggle -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingTop="10dp"
+                    android:paddingBottom="10dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Landscape Gaming &amp; Video Mode"
+                            android:textColor="@color/nothing_white"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Auto-hide island when playing games or full-screen video"
+                            android:textColor="@color/nothing_text_secondary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchHideInLandscape"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checked="true"

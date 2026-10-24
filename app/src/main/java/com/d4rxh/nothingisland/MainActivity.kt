@@ -78,6 +78,7 @@ class MainActivity : AppCompatActivity() {
 
     // Feature switches
     private lateinit var switchAttachToTop: MaterialSwitch
+    private lateinit var switchHideInLandscape: MaterialSwitch
     private lateinit var switchMusicIsland: MaterialSwitch
     private lateinit var switchChargingIsland: MaterialSwitch
     private lateinit var switchNotificationIsland: MaterialSwitch
@@ -159,6 +160,7 @@ class MainActivity : AppCompatActivity() {
         textCutoutValue = findViewById(R.id.textCutoutValue)
 
         switchAttachToTop = findViewById(R.id.switchAttachToTop)
+        switchHideInLandscape = findViewById(R.id.switchHideInLandscape)
         switchMusicIsland = findViewById(R.id.switchMusicIsland)
         switchChargingIsland = findViewById(R.id.switchChargingIsland)
         switchNotificationIsland = findViewById(R.id.switchNotificationIsland)
@@ -166,15 +168,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupTypography() {
-        TypefaceHelper.applyNdot(
-            appTitleText,
-            headerStatusText,
-            sectionPreviewTitle,
-            islandStateBadge,
-            simLeftText,
-            simRightText,
-            btnForceShowIsland
-        )
+        TypefaceHelper.applyNdotRecursively(window.decorView)
     }
 
     private fun setupListeners() {
@@ -246,7 +240,7 @@ class MainActivity : AppCompatActivity() {
                 startIslandServiceSafely()
                 Toast.makeText(
                     this,
-                    "🔴 (NOT) ISLAND Active! Y: ${prefs.yOffset}dp (Top Center)",
+                    "(NOT) ISLAND ACTIVE // Y: ${prefs.yOffset}dp (Top Center)",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -324,6 +318,10 @@ class MainActivity : AppCompatActivity() {
         switchAttachToTop.setOnCheckedChangeListener { _, isChecked ->
             prefs.attachToTop = isChecked
             notifyGeometryUpdate()
+        }
+
+        switchHideInLandscape.setOnCheckedChangeListener { _, isChecked ->
+            prefs.hideInLandscape = isChecked
         }
 
         switchMusicIsland.setOnCheckedChangeListener { _, isChecked ->
@@ -451,6 +449,7 @@ class MainActivity : AppCompatActivity() {
         textCutoutValue.text = "${prefs.cutoutSize} dp"
 
         switchAttachToTop.isChecked = prefs.attachToTop
+        switchHideInLandscape.isChecked = prefs.hideInLandscape
         switchMusicIsland.isChecked = prefs.musicIslandEnabled
         switchChargingIsland.isChecked = prefs.chargingIslandEnabled
         switchNotificationIsland.isChecked = prefs.notificationIslandEnabled

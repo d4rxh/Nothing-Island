@@ -65,6 +65,10 @@ class IslandPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_ATTACH_TO_TOP, false)
         set(value) = prefs.edit().putBoolean(KEY_ATTACH_TO_TOP, value).apply()
 
+    var hideInLandscape: Boolean
+        get() = prefs.getBoolean(KEY_HIDE_IN_LANDSCAPE, true)
+        set(value) = prefs.edit().putBoolean(KEY_HIDE_IN_LANDSCAPE, value).apply()
+
     companion object {
         private const val KEY_ISLAND_ENABLED = "pref_island_enabled"
         private const val KEY_X_OFFSET = "pref_x_offset"
@@ -78,5 +82,6 @@ class IslandPreferences(context: Context) {
         private const val KEY_NOTIFICATION_ENABLED = "pref_notification_enabled"
         private const val KEY_HAPTICS_ENABLED = "pref_haptics_enabled"
         private const val KEY_ATTACH_TO_TOP = "pref_attach_to_top"
+        private const val KEY_HIDE_IN_LANDSCAPE = "pref_hide_in_landscape"
     }
 }

@@ -1,8 +1,8 @@
 # (NOT) ISLAND // (01)
-### Authentic Nothing OS 3.0 Dynamic Island for Android
+### System-Wide Dynamic Overlay Engine for Nothing OS 3.0 & Modern Android
 
 <p align="center">
-  <img src="logo.png" width="160" height="160" alt="(NOT) Island Logo" style="border-radius: 36px;" />
+  <img src="logo.png" width="140" height="140" alt="(NOT) Island Logo" style="border-radius: 28px;" />
 </p>
 
 <p align="center">
@@ -10,88 +10,179 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/d4rxh/Nothing-Island/releases"><img src="https://img.shields.io/github/v/release/d4rxh/Nothing-Island?style=for-the-badge&color=D71920&label=RELEASE" alt="Release"/></a>
+  <a href="https://github.com/d4rxh/Nothing-Island/releases"><img src="https://img.shields.io/github/v/release/d4rxh/Nothing-Island?style=for-the-badge&color=D71920&label=RELEASE%20v1.0.10" alt="Release"/></a>
   <img src="https://img.shields.io/badge/LICENSED-MIT-white?style=for-the-badge" alt="MIT License"/>
   <img src="https://img.shields.io/badge/NOTHING%20OS-3.0%20READY-black?style=for-the-badge&logoColor=white" alt="Nothing OS 3.0 Ready"/>
   <img src="https://img.shields.io/badge/DATA%20PRIVACY-100%25%20ON--DEVICE-green?style=for-the-badge" alt="100% On-Device"/>
+  <img src="https://img.shields.io/badge/NET%20ACCESS-ZERO%20PERMISSIONS-red?style=for-the-badge" alt="Zero Internet"/>
 </p>
 
 ---
 
-## 🔴 Overview
+## [ // OVERVIEW ]
 
-**(NOT) ISLAND** is a bespoke, system-wide dynamic floating overlay engineered specifically around the front camera punch-hole of **Nothing Phone (1)**, **Nothing Phone (2)**, **Nothing Phone (2a)**, and all modern Android devices.
+**(NOT) ISLAND** is a high-performance, system-level dynamic overlay runtime engineered specifically for the front camera punch-hole of **Nothing Phone (1)**, **Nothing Phone (2)**, **Nothing Phone (2a)**, and all modern Android devices running Android 8.0 through Android 15+.
 
-Unlike generic iOS Dynamic Island clones, **(NOT) ISLAND** embraces the iconic **Nothing OS 3.0 brutalist industrial aesthetic** — featuring authentic **NDot57 dot-matrix typography**, responsive red LED equalizers, OLED pitch-black containers, full geometry customization, and micro-haptic tactile responses.
+Unlike conventional iOS Dynamic Island mimics that rely on bloated animation libraries, non-native web wrappers, or intrusive ad networks, **(NOT) ISLAND** is built from the ground up to honor the **Nothing OS 3.0 industrial brutalist design language**:
+* **NDot57 Dot-Matrix Typography:** Authentic dot-matrix text rendering throughout the application and overlay capsules.
+* **Pure OLED Pitch Black:** Zero-gradient `#000000` capsules with razor-thin `#222222` contrast borders for seamless bezel camouflage.
+* **4-Column Red LED Dot Equalizer:** Custom software canvas rendering a 4-column dot-matrix audio spectrum visualizer synchronized with active media playback.
+* **Zero Overhead & Ephemeral State:** 100% Kotlin native implementation operating strictly in local memory with zero background CPU drain during idle.
 
 ---
 
-## ⚡ Core Features
+## [ // ARCHITECTURE & EVENT PIPELINE ]
 
 ```
-┌────────────────────────────────────────────────────────┐
-│  [🎵 ART]  ● [FRONT CAMERA PUNCH-HOLE]  [||| RED DOTS] │
-└────────────────────────────────────────────────────────┘
-                    ▲ (COMPACT ISLAND)
-                    │ (Tap / Long-Press)
-                    ▼
-┌────────────────────────────────────────────────────────┐
-│  NOTHING MEDIA // SPOTIFY                          ━   │
-│  ┌─────┐  Starboy                                      │
-│  │ ART │  The Weeknd                      [|||| EQUAL] │
-│  └─────┘                                               │
-│             [⏮️]        [ ⏸️ ]        [⏭️]              │
-└────────────────────────────────────────────────────────┘
+                      ┌───────────────────────────────────────┐
+                      │    SYSTEM EVENT SOURCES (ANDROID)     │
+                      └──────────────────┬────────────────────┘
+                                         │
+        ┌────────────────────────────────┼────────────────────────────────┐
+        ▼                                ▼                                ▼
+┌───────────────────────┐   ┌──────────────────────────┐   ┌─────────────────────────┐
+│ MediaSessionManager   │   │  NotificationListener    │   │ BatteryBroadcastRecv    │
+│ Active Playback / Meta│   │  WhatsApp, SMS, Calls    │   │ AC / USB Charging Glyph │
+└───────────┬───────────┘   └────────────┬─────────────┘   └────────────┬────────────┘
+            │                            │                              │
+            └────────────────────────┐   │   ┌──────────────────────────┘
+                                     ▼   ▼   ▼
+                        ┌───────────────────────────────┐
+                        │   IslandOverlayManager (Core) │
+                        │   Thread-Safe State Machine   │
+                        └───────────────┬───────────────┘
+                                        │
+           ┌────────────────────────────┴───────────────────────────┐
+           ▼                                                        ▼
+┌──────────────────────────────────────┐  ┌──────────────────────────────────────────────────┐
+│  IslandRootLayout (Custom Touch Host)│  │  NothingIslandAccessibilityService              │
+│  - Edge Touch Interception           │  │  - WindowManager TYPE_ACCESSIBILITY_OVERLAY      │
+│  - Orientation Observer (Landscape)  │  │  - Safe Lock Screen Rendering Without PIN Block │
+└──────────────────┬───────────────────┘  └─────────────────────────┬────────────────────────┘
+                   │                                                │
+                   └────────────────────────┬───────────────────────┘
+                                            ▼
+                        ┌──────────────────────────────────────┐
+                        │       NOTHING OS 3.0 CAPSULE         │
+                        │    COMPACT  ◄───►  EXPANDED          │
+                        └──────────────────────────────────────┘
 ```
 
-### 1. 🎵 Live Music Equalizer & Controller
-- Automatically detects playback across **Spotify, YouTube Music, Apple Music, Telegram, Soundcloud, and local players**.
-- **Compact Island Mode:** Left shows circular spinning album art; right features a real-time dancing 4-column **Nothing Red Dot-Matrix Equalizer (`DotMatrixEqualizerView`)**.
-- **Expanded Card Mode:** Tap to expand into a full Nothing OS 3.0 control card with marquee track title, artist name, and tactile playback buttons (`Previous`, `Play/Pause`, `Next`).
+---
 
-### 2. ⚡ Fast Charging Dynamic Alert
-- Connecting your charger instantly triggers a smooth capsule expansion.
-- Displays an animated crimson lightning bolt glyph alongside real-time battery percentage in authentic **NDot57** dot-matrix typography.
+## [ // KEY CAPABILITIES & SUBSYSTEMS ]
 
-### 3. 💬 Smart Heads-Up Notifications
-- Floating non-intrusive pill for **WhatsApp, Telegram, SMS, and incoming calls**.
-- Briefly expands with the sender name and message preview without interrupting full-screen games or video playback.
-- Automatically collapses smoothly after 4.5 seconds.
+### 1. Persistent Media Player & Isolated Dot-Matrix Equalizer
+* **Dual-State Compact Capsule:**
+  * **Active Playback (`MUSIC_COMPACT`):** Circular spinning album art on the left + dancing 4-column Nothing Red Dot-Matrix Equalizer on the right.
+  * **Paused Playback (`MUSIC_PAUSED_COMPACT`):** When playback is paused via the island controls or third-party apps, the island stays persistent in compact mode with frozen indicator dots and album art, preventing abrupt layout collapses.
+* **Equalizer Isolation Subsystem:**
+  * During incoming notifications or phone calls, the music equalizer animator is strictly suspended (`compactEqualizer.isPlaying = false`) and hidden. Notifications display their respective app icon and sender credentials with zero visual collision.
+* **Expanded Media Console (`EXPANDED`):**
+  * Tapping the compact pill seamlessly expands into a 290dp Nothing OS brutalist control card featuring marquee track titles, artist metadata, a dedicated Play/Pause toggle (displaying `PLAY` when paused, `PAUSE` when playing), track skipping controls, and interactive waveform scrubbers.
 
-### 4. 🎛️ Complete Size, Geometry & Position Customizer
-- **Horizontal (X) Offset:** Move anywhere from -120 dp (left hole) to +120 dp (right hole).
-- **Vertical (Y) Position:** Precise top margin adjustment (0 dp to 60 dp).
-- **Island Width:** Customize compact pill width from 70 dp to 220 dp.
-- **Island Height:** Fine-tune pill height from 28 dp to 50 dp.
-- **Corner Radius:** Adjust curvature from 8 dp (squircle) to 26 dp (full pill).
-- **Camera Cutout Diameter:** Match your exact punch-hole camera diameter.
-- **Hardware Presets:** Instant 1-tap alignment for **Nothing Phone (1)** and **Nothing Phone (2 / 2a)**.
+### 2. Intelligent Landscape Gaming & Video Auto-Hide
+* **Orientation Awareness:**
+  * In standard Android window managers, status bar overlays drift awkwardly to the upper bezel when the screen rotates to landscape, obstructing in-game HUDs (PUBG, BGMI, Call of Duty) or video player interfaces (YouTube, Netflix).
+* **Zero-Interference Gaming Engine:**
+  * `IslandRootLayout` observes window configuration changes via `onConfigurationChanged(newConfig)`.
+  * When `newConfig.orientation == ORIENTATION_LANDSCAPE` and `hideInLandscape` is enabled (default: true), the entire overlay instantly hides.
+  * Upon returning to portrait mode, the capsule restores seamlessly to its calibrated position.
 
-### 5. 🛡️ 100% Zero-Leak Privacy Guarantee
-- **ZERO INTERNET PERMISSION:** The app does NOT declare `android.permission.INTERNET` in its manifest. The Android OS kernel strictly forbids the app from making any network connection.
-- **ZERO TRACKERS / ZERO ADS:** No analytics SDKs, no cloud tracking, no accounts.
-- **EPHEMERAL LOCAL STORAGE:** Media titles and notification text exist solely in volatile device memory while displayed and are discarded immediately.
+### 3. Edge-Disallow Touch Interception Pipeline
+* **Android Notification Shade Conflict Resolution:**
+  * Overlays positioned near top display notches frequently suffer from touch hijacking, where Android's native status bar intercepts downward taps as pull-down notification shade gestures.
+* **Deterministic Event Claiming:**
+  * Custom `IslandRootLayout` invokes `requestDisallowInterceptTouchEvent(true)` on `ACTION_DOWN` within capsule bounds, ensuring status-bar edge taps reliably register to expand or collapse the island without triggering the system shade.
+* **Gesture Navigation Support:**
+  * Horizontal swipe gestures allow quick dismiss/minimize of active alerts.
+
+### 4. Lock Screen Rendering via Native Accessibility Overlay
+* **Non-Blocking Keyguard Security:**
+  * Standard full-screen lock screen activities create dangerous security bottlenecks by intercepting back gestures, biometric prompts, and PIN keyboards.
+* **TYPE_ACCESSIBILITY_OVERLAY Architecture:**
+  * Leverages Android's native `AccessibilityService` window overlay layer.
+  * Renders floating alerts and charging glyphs directly over the Lock Screen while completely bypassing and preserving all system biometric prompts, pattern locks, and emergency dialers.
+
+### 5. Bezel-Flush "Attach To Top" Mode
+* **iPhone-Style Bezel Integration:**
+  * Toggle between a floating island capsule or an integrated notch design that connects seamlessly with the physical top bezel.
+  * In attached mode, top corner radii flatten (`0dp`) while bottom corners maintain fluid curvature, simulating a built-in hardware notch.
 
 ---
 
-## 📦 Direct Download
+## [ // HARDWARE CALIBRATION & PRESETS ]
 
-Download the signed release APK directly from GitHub Releases:
+The application features a real-time calibration dashboard allowing micrometer-precise alignment to any device's front camera punch-hole:
 
-👉 **[Download Nothing-Island-v1.0.9.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.9/Nothing-Island-v1.0.9.apk)**
+| Parameter | Range | Description |
+| :--- | :--- | :--- |
+| **Horizontal (X) Offset** | `-120 dp` to `+120 dp` | Shifts island horizontally (e.g. left corner for Phone 1, center for Phone 2). |
+| **Vertical (Y) Position** | `0 dp` to `60 dp` | Adjusts top margin to align flush with display cutout. |
+| **Island Minimum Width** | `70 dp` to `220 dp` | Defines compact resting width. |
+| **Island Pill Height** | `28 dp` to `50 dp` | Controls vertical thickness of the capsule. |
+| **Corner Radius** | `8 dp` to `26 dp` | Fine-tunes squircle vs circular pill curvature. |
+| **Cutout Diameter** | `16 dp` to `44 dp` | Calibrates center punch-hole clearance spacer. |
+
+### Built-in Hardware Profiles:
+* **Nothing Phone (2 / 2a):** `X: 0 dp`, `Y: 14 dp`, `Width: 110 dp`, `Height: 36 dp`, `Radius: 20 dp`, `Cutout: 28 dp`
+* **Nothing Phone (1):** `X: -75 dp`, `Y: 14 dp`, `Width: 110 dp`, `Height: 36 dp`, `Radius: 20 dp`, `Cutout: 28 dp`
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## [ // DATA PRIVACY & ZERO-NETWORK SECURITY AUDIT ]
 
-- **Language:** Kotlin 2.0+ (100%)
-- **Target SDK:** 35 (Android 15) &bull; **Min SDK:** 26 (Android 8.0 Oreo)
-- **Overlay Engine:** `WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY` with `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`
-- **Typography:** Authentic `NDot57` dot-matrix font assets
-- **Foreground Service:** Crash-resilient foreground service architecture with safe Android 14/15 fallbacks
-- **CI/CD:** Automated GitHub Actions pipeline with Keystore V1/V2 release signing
+**(NOT) ISLAND** is engineered with a strict zero-trust, privacy-first foundation:
+
+```xml
+<!-- ANDROIDMANIFEST.XML PERMISSION AUDIT -->
+<!-- STRICTLY ABSENT: android.permission.INTERNET -->
+<!-- STRICTLY ABSENT: android.permission.ACCESS_NETWORK_STATE -->
+<!-- STRICTLY ABSENT: android.permission.ACCESS_WIFI_STATE -->
+```
+
+1. **Kernel-Enforced Zero Network Access:**
+   * The app manifest contains **NO internet permission**. The Linux/Android OS kernel physically denies all socket creation, HTTP requests, and network packets from this process UID.
+2. **Zero Telemetry / Trackers:**
+   * No Google Firebase Analytics, no Crashlytics, no Mixpanel, and no advertising SDKs.
+3. **100% On-Device Ephemeral Processing:**
+   * Media metadata (song titles, artist names) and notification previews are read via Android's local `NotificationListenerService` and `MediaSessionManager`, rendered directly to hardware-accelerated memory buffers, and immediately discarded upon collapse. No data is ever written to disk or transmitted off the device.
 
 ---
 
-## 📄 License
-Licensed under the [MIT License](LICENSE).
+## [ // PRODUCTION BUILD & INSTALLATION ]
+
+### Prerequisites
+* Android 8.0 (API level 26) or higher.
+* Android Studio Ladybug (2024.2+) or JDK 17 with Gradle 8.9+.
+
+### Build From Source
+```bash
+# Clone the repository
+git clone https://github.com/d4rxh/Nothing-Island.git
+cd Nothing-Island
+
+# Build debug or release APK
+./gradlew assembleRelease
+```
+
+### Direct Download
+Grab the latest signed production APK directly from GitHub Releases:
+* **Release:** [Nothing Island v1.0.10](https://github.com/d4rxh/Nothing-Island/releases/tag/v1.0.10)
+* **Direct APK Download:** **[Nothing-Island-v1.0.10.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.10/Nothing-Island-v1.0.10.apk)**
+
+---
+
+## [ // TECH STACK ]
+
+* **Core Language:** 100% Kotlin
+* **Design Language:** Nothing OS 3.0 Brutalist / NDot57
+* **Window Subsystem:** `WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY` + `TYPE_ACCESSIBILITY_OVERLAY`
+* **Layout In Cutout Mode:** `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`
+* **Audio Visualizer:** Custom hardware-accelerated `DotMatrixEqualizerView`
+* **CI/CD:** Automated GitHub Actions with multi-scheme Keystore V1/V2/V3 signing
+
+---
+
+## [ // LICENSE ]
+Distributed under the [MIT License](LICENSE). Developed with precision for the Nothing community.
