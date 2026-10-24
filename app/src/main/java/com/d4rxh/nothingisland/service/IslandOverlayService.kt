@@ -22,6 +22,8 @@ class IslandOverlayService : Service() {
     private val CHANNEL_ID = "nothing_island_service_channel"
     private val NOTIFICATION_ID = 1001
 
+    private var telephonyReceiver: android.content.BroadcastReceiver? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -29,7 +31,46 @@ class IslandOverlayService : Service() {
         instance = this
         startForegroundSafely()
         IslandOverlayManager.registerBatteryReceiver(this)
+        registerTelephonyReceiver()
         IslandOverlayManager.showOverlay(this)
+    }
+
+    private fun registerTelephonyReceiver() {
+        try {
+            telephonyReceiver = object : android.content.BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent == null || intent.action != android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED) return
+                    val state = intent.getStringExtra(android.telephony.TelephonyManager.EXTRA_STATE) ?: return
+                    val incomingNumber = intent.getStringExtra(android.telephony.TelephonyManager.EXTRA_INCOMING_NUMBER) ?: ""
+
+                    when (state) {
+                        android.telephony.TelephonyManager.EXTRA_STATE_RINGING -> {
+                            val name = if (incomingNumber.isNotEmpty()) incomingNumber else "Incoming Call"
+                            IslandCallManager.onIncomingCall(
+                                name = name,
+                                number = incomingNumber,
+                                sourceAppName = "PHONE"
+                            )
+                        }
+                        android.telephony.TelephonyManager.EXTRA_STATE_OFFHOOK -> {
+                            IslandCallManager.onCallActive(
+                                name = "Active Call",
+                                number = incomingNumber,
+                                sourceAppName = "PHONE"
+                            )
+                        }
+                        android.telephony.TelephonyManager.EXTRA_STATE_IDLE -> {
+                            IslandCallManager.onCallEnded()
+                        }
+                    }
+                }
+            }
+            val filter = android.content.IntentFilter(android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED)
+            registerReceiver(telephonyReceiver, filter)
+            Log.i("IslandOverlayService", "Telephony receiver registered successfully")
+        } catch (e: Exception) {
+            Log.w("IslandOverlayService", "Could not register telephony receiver: ${e.message}")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -139,6 +180,11 @@ class IslandOverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            telephonyReceiver?.let { unregisterReceiver(it) }
+        } catch (e: Exception) {
+            // Ignore
+        }
         instance = null
     }
 

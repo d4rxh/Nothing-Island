@@ -102,29 +102,59 @@ object IslandCallManager {
         }, 3000)
     }
 
-    fun answerCall(): Boolean {
-        return try {
-            answerIntent?.send()
-            currentState = CallState.ACTIVE
-            callStartTime = SystemClock.elapsedRealtime()
-            startDurationTicker()
-            onCallStateChanged?.invoke(currentState)
-            true
-        } catch (e: Exception) {
-            false
+    fun answerCall(context: android.content.Context? = null): Boolean {
+        if (answerIntent != null) {
+            return try {
+                answerIntent?.send()
+                currentState = CallState.ACTIVE
+                callStartTime = SystemClock.elapsedRealtime()
+                startDurationTicker()
+                onCallStateChanged?.invoke(currentState)
+                true
+            } catch (e: Exception) {
+                false
+            }
         }
+        if (context != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            try {
+                val tm = context.getSystemService(android.content.Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+                tm?.acceptRingingCall()
+                currentState = CallState.ACTIVE
+                callStartTime = SystemClock.elapsedRealtime()
+                startDurationTicker()
+                onCallStateChanged?.invoke(currentState)
+                return true
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+        return false
     }
 
-    fun declineOrEndCall(): Boolean {
+    fun declineOrEndCall(context: android.content.Context? = null): Boolean {
         val intent = if (currentState == CallState.INCOMING) declineIntent else endIntent
-        return try {
-            intent?.send()
-            onCallEnded()
-            true
-        } catch (e: Exception) {
-            onCallEnded()
-            false
+        if (intent != null) {
+            return try {
+                intent.send()
+                onCallEnded()
+                true
+            } catch (e: Exception) {
+                onCallEnded()
+                false
+            }
         }
+        if (context != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            try {
+                val tm = context.getSystemService(android.content.Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
+                tm?.endCall()
+                onCallEnded()
+                return true
+            } catch (e: Exception) {
+                onCallEnded()
+            }
+        }
+        onCallEnded()
+        return false
     }
 
     fun getDurationString(): String {

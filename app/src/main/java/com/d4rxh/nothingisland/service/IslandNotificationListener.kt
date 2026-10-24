@@ -35,6 +35,8 @@ class IslandNotificationListener : NotificationListenerService() {
     private val cachedThumbnails = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
     private var activeCallPackage = ""
     private var activeNavigationPackage = ""
+    private var activeRecorderPackage = ""
+    private var activeClockPackage = ""
 
     private val callback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) {
@@ -211,16 +213,25 @@ class IslandNotificationListener : NotificationListenerService() {
             val text = extras.getCharSequence("android.text")?.toString() ?: ""
             val actions = notification.actions
 
-            // 1. Check for Calls (Incoming or Ongoing Call)
+            // 1. Check for Calls (Incoming or Ongoing Call from Dialer, Telecom, WhatsApp, Truecaller, etc.)
             val isCall = notification.category == android.app.Notification.CATEGORY_CALL ||
                     sbn.packageName.contains("dialer") || sbn.packageName.contains("telecom") ||
-                    sbn.packageName.contains("phone") ||
+                    sbn.packageName.contains("phone") || sbn.packageName.contains("truecaller") ||
+                    sbn.packageName.contains("incall") ||
                     actions?.any {
                         val t = it.title?.toString()?.lowercase() ?: ""
                         t.contains("answer") || t.contains("decline") || t.contains("reject") || t.contains("hang")
                     } == true
 
-            if (isCall && (title.isNotEmpty() || text.isNotEmpty())) {
+            val callerCandidate = extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString()
+                ?: extras.getCharSequence("android.title.big")?.toString()
+                ?: extras.getCharSequence(android.app.Notification.EXTRA_CONVERSATION_TITLE)?.toString()
+                ?: (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    (extras.getParcelable(android.app.Notification.EXTRA_CALL_PERSON) as? android.app.Person)?.name?.toString()
+                } else null)
+                ?: title
+
+            if (isCall && (callerCandidate.isNotEmpty() || text.isNotEmpty() || actions != null)) {
                 val pm = packageManager
                 val appName = try {
                     val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
@@ -234,16 +245,21 @@ class IslandNotificationListener : NotificationListenerService() {
                     null
                 }
 
-                val answerAction = actions?.firstOrNull { it.title?.toString()?.contains("answer", ignoreCase = true) == true }
+                val answerAction = actions?.firstOrNull {
+                    val t = it.title?.toString()?.lowercase() ?: ""
+                    t.contains("answer") || t.contains("accept") || t.contains("join")
+                }
                 val declineAction = actions?.firstOrNull {
                     val t = it.title?.toString()?.lowercase() ?: ""
-                    t.contains("decline") || t.contains("reject") || t.contains("end") || t.contains("hang")
+                    t.contains("decline") || t.contains("reject") || t.contains("end") || t.contains("hang") || t.contains("dismiss")
                 }
+
+                val finalCaller = callerCandidate.ifEmpty { "Incoming Call" }
 
                 if (answerAction != null) {
                     // Incoming call
                     IslandCallManager.onIncomingCall(
-                        name = title.ifEmpty { "Incoming Call" },
+                        name = finalCaller,
                         number = text,
                         sourceAppName = appName,
                         sourceAppIcon = appIcon,
@@ -253,7 +269,7 @@ class IslandNotificationListener : NotificationListenerService() {
                 } else {
                     // Ongoing / Active call
                     IslandCallManager.onCallActive(
-                        name = title.ifEmpty { "Active Call" },
+                        name = finalCaller,
                         number = text,
                         sourceAppName = appName,
                         sourceAppIcon = appIcon,
@@ -285,6 +301,75 @@ class IslandNotificationListener : NotificationListenerService() {
                     intent = notification.contentIntent
                 )
                 activeNavigationPackage = sbn.packageName
+                return
+            }
+
+            // 3. Check for Voice Recorder (Nothing Sound Recorder, Google Recorder, Samsung Voice Note, etc.)
+            val isRecorder = sbn.packageName.contains("recorder") ||
+                    sbn.packageName.contains("voicenote") ||
+                    sbn.packageName.contains("soundrecorder") ||
+                    title.contains("recording", ignoreCase = true) ||
+                    text.contains("recording", ignoreCase = true)
+
+            if (isRecorder && (title.isNotEmpty() || text.isNotEmpty())) {
+                val pm = packageManager
+                val appName = try {
+                    val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
+                    pm.getApplicationLabel(appInfo).toString()
+                } catch (e: Exception) {
+                    "RECORDER"
+                }
+                val appIcon: Drawable? = try {
+                    pm.getApplicationIcon(sbn.packageName)
+                } catch (e: Exception) {
+                    null
+                }
+
+                activeRecorderPackage = sbn.packageName
+                IslandOverlayManager.onRecorderNotification(
+                    appName = appName,
+                    title = title,
+                    text = text,
+                    appIcon = appIcon,
+                    intent = notification.contentIntent
+                )
+                return
+            }
+
+            // 4. Check for External Stopwatch / Timer (Google Clock, Nothing Clock, Samsung Clock, etc.)
+            val isClock = sbn.packageName.contains("clock") ||
+                    sbn.packageName.contains("deskclock") ||
+                    notification.category == "stopwatch" ||
+                    notification.category == android.app.Notification.CATEGORY_ALARM ||
+                    title.contains("stopwatch", ignoreCase = true) ||
+                    title.contains("timer", ignoreCase = true) ||
+                    text.contains("stopwatch", ignoreCase = true) ||
+                    text.contains("timer", ignoreCase = true)
+
+            if (isClock && (title.isNotEmpty() || text.isNotEmpty())) {
+                val pm = packageManager
+                val appName = try {
+                    val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
+                    pm.getApplicationLabel(appInfo).toString()
+                } catch (e: Exception) {
+                    "CLOCK"
+                }
+                val appIcon: Drawable? = try {
+                    pm.getApplicationIcon(sbn.packageName)
+                } catch (e: Exception) {
+                    null
+                }
+
+                activeClockPackage = sbn.packageName
+                val isTimer = title.contains("timer", ignoreCase = true) || text.contains("timer", ignoreCase = true)
+                IslandOverlayManager.onExternalClockNotification(
+                    appName = appName,
+                    title = title,
+                    text = text,
+                    isTimer = isTimer,
+                    appIcon = appIcon,
+                    intent = notification.contentIntent
+                )
                 return
             }
 
@@ -371,6 +456,18 @@ class IslandNotificationListener : NotificationListenerService() {
         try {
             if (sbn == null || sbn.packageName == packageName) return
 
+            if (activeRecorderPackage.isNotEmpty() && sbn.packageName == activeRecorderPackage) {
+                IslandOverlayManager.clearRecorderNotification()
+                activeRecorderPackage = ""
+                return
+            }
+
+            if (activeClockPackage.isNotEmpty() && sbn.packageName == activeClockPackage) {
+                IslandOverlayManager.clearExternalClockNotification()
+                activeClockPackage = ""
+                return
+            }
+
             if (activeCallPackage.isNotEmpty() && sbn.packageName == activeCallPackage) {
                 IslandCallManager.onCallEnded()
                 activeCallPackage = ""
@@ -390,8 +487,8 @@ class IslandNotificationListener : NotificationListenerService() {
                 return
             }
 
-            // When user dismisses notification from shade, restore state immediately
-            IslandOverlayManager.onNotificationDismissed()
+            // When user dismisses notification from shade, restore state only if it matches!
+            IslandOverlayManager.onNotificationDismissed(sbn.packageName)
         } catch (e: Exception) {
             Log.e("NotificationListener", "Error in onNotificationRemoved: ${e.message}", e)
         }

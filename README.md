@@ -7,7 +7,7 @@ A minimal, system-wide dynamic overlay engineered for Nothing OS and modern Andr
 </p>
 
 <p align="center">
-  <a href="https://github.com/d4rxh/Nothing-Island/releases"><img src="https://img.shields.io/github/v/release/d4rxh/Nothing-Island?style=flat-square&color=D71920&label=Release%20v1.0.16" alt="Release"/></a>
+  <a href="https://github.com/d4rxh/Nothing-Island/releases"><img src="https://img.shields.io/github/v/release/d4rxh/Nothing-Island?style=flat-square&color=D71920&label=Release%20v1.0.17" alt="Release"/></a>
   <img src="https://img.shields.io/badge/License-MIT-black?style=flat-square" alt="MIT License"/>
   <img src="https://img.shields.io/badge/Android-8.0%20--%2015+-black?style=flat-square" alt="Android Support"/>
   <img src="https://img.shields.io/badge/Privacy-100%25%20On--Device-green?style=flat-square" alt="100% On-Device"/>
@@ -49,6 +49,14 @@ Designed around Nothing OS principles:
 ### Turn-by-Turn Navigation
 - Compact turn direction indicator, maneuver instructions, and distance to next turn when navigation is active (Google Maps).
 - Tapping the island opens the navigation application.
+
+### Clean Screenshot Gesture
+- Swipe UP or double-tap on the island to momentarily hide it for 6 seconds.
+- Allows you to take completely clean screenshots of your phone without the dynamic island overlay appearing in the screenshot.
+
+### Voice Recorder & Clock Integration
+- Directly detects and surfaces ongoing recordings from Nothing Sound Recorder, Google Recorder, and voice recorder apps with a pulsing red LED indicator and live duration.
+- Automatically mirrors Google Clock, Nothing Clock, and system stopwatch/timer alerts.
 
 ### Device & Connectivity Events
 - Real-time charging status and battery percentage indicator upon plugging in.
@@ -101,8 +109,8 @@ Nothing Island is built with a zero-trust, privacy-first architecture:
 
 Signed production APKs are available on GitHub Releases:
 
-- **Latest Release**: [Nothing Island v1.0.16](https://github.com/d4rxh/Nothing-Island/releases/tag/v1.0.16)
-- **Direct APK**: [Nothing-Island-v1.0.16.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.16/Nothing-Island-v1.0.16.apk)
+- **Latest Release**: [Nothing Island v1.0.17](https://github.com/d4rxh/Nothing-Island/releases/tag/v1.0.17)
+- **Direct APK**: [Nothing-Island-v1.0.17.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.17/Nothing-Island-v1.0.17.apk)
 
 ### Required Permissions
 - **Display over other apps**: Needed to render the floating punch-hole capsule.

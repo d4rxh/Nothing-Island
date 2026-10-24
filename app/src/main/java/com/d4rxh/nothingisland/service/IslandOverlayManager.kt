@@ -124,10 +124,28 @@ object IslandOverlayManager {
         TIMER_COMPACT,
         NAVIGATION_COMPACT,
         DEVICE_EVENT_COMPACT,
+        RECORDER_COMPACT,
         EXPANDED
     }
 
     private var currentState: State = State.IDLE
+
+    // Voice Recorder state
+    private var isRecordingActive = false
+    private var recorderAppName = "RECORDER"
+    private var recorderTitle = "Recording"
+    private var recorderText = ""
+    private var recorderAppIcon: Drawable? = null
+    private var recorderIntent: PendingIntent? = null
+
+    // External Clock / Timer / Stopwatch state
+    private var isExternalClockActive = false
+    private var externalClockAppName = "CLOCK"
+    private var externalClockTitle = "Timer"
+    private var externalClockText = ""
+    private var isExternalClockTimer = true
+    private var externalClockAppIcon: Drawable? = null
+    private var externalClockIntent: PendingIntent? = null
 
     // Quick Reply state
     private var activeRemoteInput: RemoteInput? = null
@@ -711,6 +729,12 @@ object IslandOverlayManager {
             collapseIsland()
         }
 
+        // Swipe UP or double-tap: Hide island for 6 seconds for clean screenshot
+        islandRoot?.onIslandScreenshotHide = {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(context)
+            temporarilyHideIsland(6000)
+        }
+
         islandRoot?.onOrientationChanged = {
             onOrientationChanged()
         }
@@ -767,12 +791,12 @@ object IslandOverlayManager {
         // Call Controls
         btnAnswerCall?.setOnClickListener {
             if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(it.context)
-            IslandCallManager.answerCall()
+            IslandCallManager.answerCall(context)
         }
 
         btnDeclineCall?.setOnClickListener {
             if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(it.context)
-            IslandCallManager.declineOrEndCall()
+            IslandCallManager.declineOrEndCall(context)
             collapseIsland()
         }
 
@@ -867,11 +891,11 @@ object IslandOverlayManager {
     private fun getActiveEvents(): List<State> {
         val list = mutableListOf<State>()
         if (IslandCallManager.currentState != IslandCallManager.CallState.NONE) list.add(State.CALL_COMPACT)
+        if (isRecordingActive) list.add(State.RECORDER_COMPACT)
         if (NavigationManager.isNavigating) list.add(State.NAVIGATION_COMPACT)
-        if (IslandTimerManager.currentMode != IslandTimerManager.Mode.NONE) list.add(State.TIMER_COMPACT)
+        if (isExternalClockActive || IslandTimerManager.currentMode != IslandTimerManager.Mode.NONE) list.add(State.TIMER_COMPACT)
         if (isMusicPlaying) list.add(State.MUSIC_COMPACT)
         else if (currentTrackTitle.isNotEmpty() && pausedTimeoutRunnable != null) list.add(State.MUSIC_PAUSED_COMPACT)
-        if (isDeviceCharging) list.add(State.CHARGING_COMPACT)
         if (currentCricketScore.isNotEmpty()) list.add(State.CRICKET_COMPACT)
         return list
     }
@@ -888,6 +912,26 @@ object IslandOverlayManager {
     }
 
     private fun handleExpandedCardClick(context: Context) {
+        if (isRecordingActive && recorderIntent != null) {
+            try {
+                recorderIntent?.send()
+                collapseIsland()
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "Recorder launch error: ${e.message}")
+            }
+        }
+
+        if (isExternalClockActive && externalClockIntent != null) {
+            try {
+                externalClockIntent?.send()
+                collapseIsland()
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "Clock launch error: ${e.message}")
+            }
+        }
+
         if (NavigationManager.isNavigating) {
             try {
                 NavigationManager.launchIntent?.send()
@@ -977,6 +1021,30 @@ object IslandOverlayManager {
         val prefs = IslandPreferences(context)
         if (prefs.hapticsEnabled) overlayView?.let { NothingHapticHelper.vibrateTick(it) }
 
+        // If voice recorder is running, single tap immediately opens recorder
+        if (currentState == State.RECORDER_COMPACT && isRecordingActive) {
+            if (recorderIntent != null) {
+                try {
+                    recorderIntent?.send()
+                    return
+                } catch (e: Exception) {
+                    // fallthrough to expand
+                }
+            }
+        }
+
+        // If external clock / timer is running, single tap opens clock
+        if (currentState == State.TIMER_COMPACT && isExternalClockActive) {
+            if (externalClockIntent != null) {
+                try {
+                    externalClockIntent?.send()
+                    return
+                } catch (e: Exception) {
+                    // fallthrough to expand
+                }
+            }
+        }
+
         // If a notification is active, clicking the island capsule OPENS the notifying app immediately!
         if (hasActiveNotification) {
             handleNotificationLaunch(context)
@@ -987,6 +1055,126 @@ object IslandOverlayManager {
             collapseIsland()
         } else {
             expandIsland()
+        }
+    }
+
+    fun temporarilyHideIsland(durationMs: Long = 6000) {
+        val view = overlayView ?: return
+        mainHandler.post {
+            view.animate()
+                .alpha(0f)
+                .scaleX(0.7f)
+                .scaleY(0.7f)
+                .setDuration(160)
+                .withEndAction {
+                    view.visibility = View.INVISIBLE
+                    mainHandler.postDelayed({
+                        if (isAttached && overlayView != null) {
+                            view.visibility = View.VISIBLE
+                            view.animate()
+                                .alpha(1f)
+                                .scaleX(1f)
+                                .scaleY(1f)
+                                .setDuration(200)
+                                .start()
+                        }
+                    }, durationMs)
+                }
+                .start()
+        }
+    }
+
+    fun onRecorderNotification(
+        appName: String,
+        title: String,
+        text: String,
+        appIcon: Drawable?,
+        intent: PendingIntent?
+    ) {
+        val context = appContext ?: return
+        val prefs = IslandPreferences(context)
+        isRecordingActive = true
+        recorderAppName = appName
+        recorderTitle = title
+        recorderText = text
+        recorderAppIcon = appIcon
+        recorderIntent = intent
+
+        mainHandler.post {
+            compactLeftIcon?.setImageResource(R.drawable.ic_dot)
+            compactLeftIcon?.setColorFilter(Color.parseColor("#D71920"))
+            compactLeftIcon?.visibility = View.VISIBLE
+            compactLeftText?.visibility = View.GONE
+            centerCutoutSpacer?.visibility = View.VISIBLE
+
+            val timeRegex = Regex("""\d{1,2}:\d{2}(?::\d{2})?""")
+            val extracted = timeRegex.find(text)?.value
+                ?: timeRegex.find(title)?.value
+                ?: "REC"
+            compactRightText?.text = extracted
+            compactRightText?.setTextColor(Color.parseColor("#D71920"))
+            compactRightText?.visibility = View.VISIBLE
+            compactEqualizer?.visibility = View.GONE
+            islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
+
+            updateState(State.RECORDER_COMPACT)
+        }
+    }
+
+    fun clearRecorderNotification() {
+        isRecordingActive = false
+        mainHandler.post {
+            if (currentState == State.RECORDER_COMPACT) {
+                restorePreviousMediaOrIdle()
+            }
+        }
+    }
+
+    fun onExternalClockNotification(
+        appName: String,
+        title: String,
+        text: String,
+        isTimer: Boolean,
+        appIcon: Drawable?,
+        intent: PendingIntent?
+    ) {
+        val context = appContext ?: return
+        val prefs = IslandPreferences(context)
+        isExternalClockActive = true
+        externalClockAppName = appName
+        externalClockTitle = title
+        externalClockText = text
+        isExternalClockTimer = isTimer
+        externalClockAppIcon = appIcon
+        externalClockIntent = intent
+
+        mainHandler.post {
+            compactLeftIcon?.setImageResource(R.drawable.ic_timer)
+            compactLeftIcon?.setColorFilter(if (isTimer) Color.parseColor("#D71920") else Color.WHITE)
+            compactLeftIcon?.visibility = View.VISIBLE
+            compactLeftText?.visibility = View.GONE
+            centerCutoutSpacer?.visibility = View.VISIBLE
+
+            val timeRegex = Regex("""\d{1,2}:\d{2}(?::\d{2})?""")
+            val extracted = timeRegex.find(text)?.value
+                ?: timeRegex.find(title)?.value
+                ?: (if (isTimer) "TIMER" else "STOPWATCH")
+            compactRightText?.text = extracted
+            compactRightText?.setTextColor(Color.WHITE)
+            compactRightText?.visibility = View.VISIBLE
+            compactEqualizer?.visibility = View.GONE
+            islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
+
+            updateState(State.TIMER_COMPACT)
+        }
+    }
+
+    fun clearExternalClockNotification() {
+        isExternalClockActive = false
+        mainHandler.post {
+            if (currentState == State.TIMER_COMPACT && IslandTimerManager.currentMode == IslandTimerManager.Mode.NONE) {
+                restorePreviousMediaOrIdle()
+            }
         }
     }
 
@@ -1034,7 +1222,7 @@ object IslandOverlayManager {
             updateSplitPillState()
 
             if (currentState == State.MUSIC_COMPACT || currentState == State.MUSIC_PAUSED_COMPACT ||
-                (currentState == State.EXPANDED && !isDeviceCharging && currentCricketScore.isEmpty())
+                (currentState == State.EXPANDED && currentCricketScore.isEmpty())
             ) {
                 restorePreviousMediaOrIdle()
             }
@@ -1163,20 +1351,23 @@ object IslandOverlayManager {
                         compactRightText?.text = "$batteryPercent%"
                     }
 
-                    if (isFirstConnect && prefs.hapticsEnabled) {
-                        NothingHapticHelper.vibratePop(context)
-                    }
-
                     // Dual Island Split Pill update!
                     updateSplitPillState()
 
-                    // If music is NOT playing and no notification, maintain CHARGING_COMPACT continuously!
-                    if (!isMusicPlaying && !hasActiveNotification && currentState != State.EXPANDED) {
-                        displayChargingCompact()
-                    }
-
+                    // ONLY flash charging banner when cable is FIRST plugged in!
+                    // Never interrupt active media / YouTube when already plugged in!
                     if (isFirstConnect) {
+                        if (prefs.hapticsEnabled) {
+                            NothingHapticHelper.vibratePop(context)
+                        }
+                        displayChargingCompact()
                         playChargingAnimation(batteryPercent)
+
+                        mainHandler.postDelayed({
+                            if (currentState == State.CHARGING_COMPACT) {
+                                restorePreviousMediaOrIdle()
+                            }
+                        }, 3500)
                     }
                 } else {
                     // Charger disconnected
@@ -1407,7 +1598,10 @@ object IslandOverlayManager {
         }
     }
 
-    fun onNotificationDismissed() {
+    fun onNotificationDismissed(packageName: String = "") {
+        if (packageName.isNotEmpty() && packageName != activeNotificationPackage) {
+            return
+        }
         clearActiveNotification()
         mainHandler.post {
             dismissNotificationAndRestore()
@@ -1517,14 +1711,14 @@ object IslandOverlayManager {
         clearActiveNotification()
         if (IslandCallManager.currentState != IslandCallManager.CallState.NONE) {
             updateState(State.CALL_COMPACT)
+        } else if (isRecordingActive) {
+            updateState(State.RECORDER_COMPACT)
         } else if (NavigationManager.isNavigating) {
             updateState(State.NAVIGATION_COMPACT)
-        } else if (IslandTimerManager.currentMode != IslandTimerManager.Mode.NONE) {
+        } else if (isExternalClockActive || IslandTimerManager.currentMode != IslandTimerManager.Mode.NONE) {
             updateState(State.TIMER_COMPACT)
         } else if (currentTrackTitle.isNotEmpty() && (isMusicPlaying || pausedTimeoutRunnable != null)) {
             restoreMusicCompactState(isPlaying = isMusicPlaying)
-        } else if (isDeviceCharging) {
-            displayChargingCompact()
         } else if (currentCricketScore.isNotEmpty()) {
             displayCricketCompact()
         } else {
@@ -1740,17 +1934,41 @@ object IslandOverlayManager {
                     compactContainer?.visibility = View.VISIBLE
                     expandedContainer?.visibility = View.GONE
                     compactLeftIcon?.setImageResource(R.drawable.ic_timer)
-                    compactLeftIcon?.setColorFilter(Color.parseColor("#D71920"))
+                    compactLeftIcon?.setColorFilter(if (isExternalClockActive && !isExternalClockTimer) Color.WHITE else Color.parseColor("#D71920"))
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
                     centerCutoutSpacer?.visibility = View.VISIBLE
 
-                    compactRightText?.text = if (IslandTimerManager.currentMode == IslandTimerManager.Mode.TIMER) {
+                    compactRightText?.text = if (isExternalClockActive) {
+                        val timeRegex = Regex("""\d{1,2}:\d{2}(?::\d{2})?""")
+                        timeRegex.find(externalClockText)?.value
+                            ?: timeRegex.find(externalClockTitle)?.value
+                            ?: (if (isExternalClockTimer) "TIMER" else "STOPWATCH")
+                    } else if (IslandTimerManager.currentMode == IslandTimerManager.Mode.TIMER) {
                         IslandTimerManager.getTimerDisplayString()
                     } else {
                         IslandTimerManager.getStopwatchDisplayString()
                     }
                     compactRightText?.setTextColor(Color.WHITE)
+                    compactRightText?.visibility = View.VISIBLE
+                    compactEqualizer?.visibility = View.GONE
+                    islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
+                }
+                State.RECORDER_COMPACT -> {
+                    compactContainer?.visibility = View.VISIBLE
+                    expandedContainer?.visibility = View.GONE
+                    compactLeftIcon?.setImageResource(R.drawable.ic_dot)
+                    compactLeftIcon?.setColorFilter(Color.parseColor("#D71920"))
+                    compactLeftIcon?.visibility = View.VISIBLE
+                    compactLeftText?.visibility = View.GONE
+                    centerCutoutSpacer?.visibility = View.VISIBLE
+
+                    val timeRegex = Regex("""\d{1,2}:\d{2}(?::\d{2})?""")
+                    val extracted = timeRegex.find(recorderText)?.value
+                        ?: timeRegex.find(recorderTitle)?.value
+                        ?: "REC"
+                    compactRightText?.text = extracted
+                    compactRightText?.setTextColor(Color.parseColor("#D71920"))
                     compactRightText?.visibility = View.VISIBLE
                     compactEqualizer?.visibility = View.GONE
                     islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
@@ -1830,6 +2048,50 @@ object IslandOverlayManager {
                         callControlsRow?.visibility = View.VISIBLE
                         btnAnswerCall?.visibility = if (IslandCallManager.currentState == IslandCallManager.CallState.INCOMING) View.VISIBLE else View.GONE
                         btnDeclineCall?.visibility = View.VISIBLE
+                    } else if (isRecordingActive) {
+                        // Recorder Expanded Card
+                        mediaControlsRow?.visibility = View.GONE
+                        quickReplyRow?.visibility = View.GONE
+                        timerControlsRow?.visibility = View.GONE
+                        callControlsRow?.visibility = View.GONE
+                        expandedEqualizer?.visibility = View.GONE
+
+                        if (recorderAppIcon != null) {
+                            expandedAppIcon?.setImageDrawable(recorderAppIcon)
+                            expandedArtwork?.setImageDrawable(recorderAppIcon)
+                        } else {
+                            expandedAppIcon?.setImageResource(R.drawable.ic_dot)
+                            expandedAppIcon?.setColorFilter(Color.parseColor("#D71920"))
+                            expandedArtwork?.setImageResource(R.drawable.ic_dot)
+                            expandedArtwork?.setColorFilter(Color.parseColor("#D71920"))
+                        }
+                        expandedArtwork?.visibility = View.VISIBLE
+                        expandedSourceAppText?.text = "VOICE RECORDER // ${recorderAppName.uppercase()}"
+                        expandedTitleText?.text = recorderTitle.ifEmpty { "RECORDING" }
+                        expandedArtistText?.text = recorderText.ifEmpty { "Audio recording active" }
+                        expandedNotificationBody?.visibility = View.VISIBLE
+                        expandedNotificationBody?.text = "Recording in progress • Tap to open"
+                    } else if (isExternalClockActive) {
+                        // External Clock / Timer Expanded Card
+                        mediaControlsRow?.visibility = View.GONE
+                        quickReplyRow?.visibility = View.GONE
+                        timerControlsRow?.visibility = View.GONE
+                        callControlsRow?.visibility = View.GONE
+                        expandedEqualizer?.visibility = View.GONE
+
+                        if (externalClockAppIcon != null) {
+                            expandedAppIcon?.setImageDrawable(externalClockAppIcon)
+                            expandedArtwork?.setImageDrawable(externalClockAppIcon)
+                        } else {
+                            expandedAppIcon?.setImageResource(R.drawable.ic_timer)
+                            expandedArtwork?.setImageResource(R.drawable.ic_timer)
+                        }
+                        expandedArtwork?.visibility = View.VISIBLE
+                        expandedSourceAppText?.text = externalClockAppName.uppercase()
+                        expandedTitleText?.text = externalClockTitle
+                        expandedArtistText?.text = externalClockText
+                        expandedNotificationBody?.visibility = View.VISIBLE
+                        expandedNotificationBody?.text = externalClockText.ifEmpty { "Timer active • Tap to open" }
                     } else if (NavigationManager.isNavigating) {
                         // 2. Navigation Expanded Card
                         mediaControlsRow?.visibility = View.GONE

@@ -24,12 +24,14 @@ class IslandRootLayout @JvmOverloads constructor(
     var onIslandCollapse: (() -> Unit)? = null
     var onIslandSwipeDismiss: (() -> Unit)? = null
     var onIslandSwipeNext: (() -> Unit)? = null
+    var onIslandScreenshotHide: (() -> Unit)? = null
     var onOrientationChanged: (() -> Unit)? = null
 
     private var downTime = 0L
     private var downX = 0f
     private var downY = 0f
     private var isTracking = false
+    private var lastTapTime = 0L
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -72,6 +74,13 @@ class IslandRootLayout @JvmOverloads constructor(
                     val dy = abs(event.rawY - downY)
                     val density = resources.displayMetrics.density
 
+                    // Vertical swipe up: quick hide for screenshot capture
+                    val dySwipe = downY - event.rawY
+                    if (dySwipe > 30 * density && dx < 45 * density && !isExpandedState) {
+                        onIslandScreenshotHide?.invoke()
+                        return true
+                    }
+
                     // Horizontal swipe: switch between active events if multiple, or dismiss
                     val swipeThreshold = 55 * density
                     if (dx > swipeThreshold && dy < 35 * density && !isExpandedState) {
@@ -86,6 +95,15 @@ class IslandRootLayout @JvmOverloads constructor(
                     // Generous tap detection (even with slight thumb roll)
                     val maxTapDelta = 45 * density
                     if (duration < 600 && dx < maxTapDelta && dy < maxTapDelta) {
+                        val now = SystemClock.uptimeMillis()
+                        if (now - lastTapTime < 350 && !isExpandedState) {
+                            // Double tap: hide island for 6 seconds for clean screenshot
+                            lastTapTime = 0L
+                            onIslandScreenshotHide?.invoke()
+                            return true
+                        }
+                        lastTapTime = now
+
                         if (isExpandedState) {
                             onIslandCollapse?.invoke()
                         } else {
