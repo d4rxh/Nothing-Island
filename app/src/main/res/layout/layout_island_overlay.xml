@@ -258,6 +258,143 @@
                     android:textSize="13sp"
                     android:visibility="gone" />
 
+                <!-- Call Controls Row (Incoming / Active Call) -->
+                <LinearLayout
+                    android:id="@+id/callControlsRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <ImageButton
+                        android:id="@+id/btnDeclineCall"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginEnd="32dp"
+                        android:background="@drawable/bg_red_pill"
+                        android:contentDescription="Decline"
+                        android:padding="12dp"
+                        android:src="@drawable/ic_call_end" />
+
+                    <ImageButton
+                        android:id="@+id/btnAnswerCall"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="@drawable/bg_green_pill"
+                        android:contentDescription="Answer"
+                        android:padding="12dp"
+                        android:src="@drawable/ic_call" />
+                </LinearLayout>
+
+                <!-- Quick Reply Row for Messages (WhatsApp, Telegram, SMS) -->
+                <LinearLayout
+                    android:id="@+id/quickReplyRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <EditText
+                        android:id="@+id/replyEditText"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_reply_input"
+                        android:hint="Type reply..."
+                        android:imeOptions="actionSend"
+                        android:inputType="textCapSentences"
+                        android:maxLines="1"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:textColor="@color/nothing_white"
+                        android:textColorHint="@color/nothing_text_muted"
+                        android:textSize="12sp" />
+
+                    <ImageButton
+                        android:id="@+id/btnSendReply"
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_red_pill"
+                        android:contentDescription="Send"
+                        android:padding="9dp"
+                        android:src="@drawable/ic_send" />
+                </LinearLayout>
+
+                <!-- Timer & Stopwatch Controls Row -->
+                <LinearLayout
+                    android:id="@+id/timerControlsRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/btnTimerReset"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="24dp"
+                        android:letterSpacing="0.1"
+                        android:padding="8dp"
+                        android:text="RESET"
+                        android:textColor="@color/nothing_text_secondary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <ImageButton
+                        android:id="@+id/btnTimerPlayPause"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="@drawable/bg_red_pill"
+                        android:contentDescription="Timer Toggle"
+                        android:padding="12dp"
+                        android:src="@drawable/ic_play" />
+
+                    <TextView
+                        android:id="@+id/btnTimerLap"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="24dp"
+                        android:letterSpacing="0.1"
+                        android:padding="8dp"
+                        android:text="LAP"
+                        android:textColor="@color/nothing_text_secondary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- Multi-Event Dot Indicators (Active when 2+ events running) -->
+                <LinearLayout
+                    android:id="@+id/eventIndicatorDots"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <View
+                        android:id="@+id/dotEvent1"
+                        android:layout_width="6dp"
+                        android:layout_height="6dp"
+                        android:background="@drawable/ic_dot" />
+
+                    <View
+                        android:id="@+id/dotEvent2"
+                        android:layout_width="6dp"
+                        android:layout_height="6dp"
+                        android:layout_marginStart="6dp"
+                        android:alpha="0.3"
+                        android:background="@drawable/ic_dot" />
+                </LinearLayout>
+
             </LinearLayout>
 
         </LinearLayout>

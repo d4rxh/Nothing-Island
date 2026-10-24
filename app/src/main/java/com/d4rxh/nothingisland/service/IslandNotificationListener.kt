@@ -32,6 +32,10 @@ class IslandNotificationListener : NotificationListenerService() {
         }
 
     private var currentController: MediaController? = null
+    private val cachedThumbnails = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
+    private var activeCallPackage = ""
+    private var activeNavigationPackage = ""
+
     private val callback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) {
             dispatchMediaUpdate()
@@ -114,12 +118,14 @@ class IslandNotificationListener : NotificationListenerService() {
                 return
             }
 
-            // Safe artwork extraction
+            // Safe artwork extraction (with notification thumbnail fallback for YouTube & players)
             val rawArtwork: Bitmap? = try {
                 metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
                     ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                    ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                    ?: cachedThumbnails[controller.packageName ?: ""]
             } catch (e: Exception) {
-                null
+                cachedThumbnails[controller.packageName ?: ""]
             }
 
             // Extract App Logo & App Name (Spotify, YouTube Music, etc.)
@@ -131,14 +137,16 @@ class IslandNotificationListener : NotificationListenerService() {
             }
 
             val appName = try {
-                if (sourcePackage.isNotEmpty()) {
+                if (sourcePackage.contains("youtube")) {
+                    "YOUTUBE"
+                } else if (sourcePackage.isNotEmpty()) {
                     val appInfo = packageManager.getApplicationInfo(sourcePackage, 0)
                     packageManager.getApplicationLabel(appInfo).toString()
                 } else {
                     "NOW PLAYING"
                 }
             } catch (e: Exception) {
-                "NOW PLAYING"
+                if (sourcePackage.contains("youtube")) "YOUTUBE" else "NOW PLAYING"
             }
 
             // Forward to Island Overlay
@@ -175,11 +183,113 @@ class IslandNotificationListener : NotificationListenerService() {
             )
             if (ignoredPackages.contains(sbn.packageName)) return
 
-            // Ignore ongoing / foreground service sticky pins
-            if (sbn.isOngoing) return
-
             val notification = sbn.notification ?: return
             val extras = notification.extras ?: return
+
+            // Cache media thumbnail for YouTube and video/audio players
+            if (sbn.packageName.contains("youtube") || sbn.packageName.contains("music") || sbn.packageName.contains("spotify") || sbn.packageName.contains("video")) {
+                val largeIcon = notification.getLargeIcon()
+                if (largeIcon != null) {
+                    try {
+                        val drawable = largeIcon.loadDrawable(this)
+                        if (drawable is android.graphics.drawable.BitmapDrawable) {
+                            cachedThumbnails[sbn.packageName] = drawable.bitmap
+                        } else if (drawable != null) {
+                            val bmp = Bitmap.createBitmap(drawable.intrinsicWidth.coerceAtLeast(1), drawable.intrinsicHeight.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+                            val canvas = android.graphics.Canvas(bmp)
+                            drawable.setBounds(0, 0, canvas.width, canvas.height)
+                            drawable.draw(canvas)
+                            cachedThumbnails[sbn.packageName] = bmp
+                        }
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
+            }
+
+            val title = extras.getCharSequence("android.title")?.toString() ?: ""
+            val text = extras.getCharSequence("android.text")?.toString() ?: ""
+            val actions = notification.actions
+
+            // 1. Check for Calls (Incoming or Ongoing Call)
+            val isCall = notification.category == android.app.Notification.CATEGORY_CALL ||
+                    sbn.packageName.contains("dialer") || sbn.packageName.contains("telecom") ||
+                    sbn.packageName.contains("phone") ||
+                    actions?.any {
+                        val t = it.title?.toString()?.lowercase() ?: ""
+                        t.contains("answer") || t.contains("decline") || t.contains("reject") || t.contains("hang")
+                    } == true
+
+            if (isCall && (title.isNotEmpty() || text.isNotEmpty())) {
+                val pm = packageManager
+                val appName = try {
+                    val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
+                    pm.getApplicationLabel(appInfo).toString()
+                } catch (e: Exception) {
+                    "CALL"
+                }
+                val appIcon: Drawable? = try {
+                    pm.getApplicationIcon(sbn.packageName)
+                } catch (e: Exception) {
+                    null
+                }
+
+                val answerAction = actions?.firstOrNull { it.title?.toString()?.contains("answer", ignoreCase = true) == true }
+                val declineAction = actions?.firstOrNull {
+                    val t = it.title?.toString()?.lowercase() ?: ""
+                    t.contains("decline") || t.contains("reject") || t.contains("end") || t.contains("hang")
+                }
+
+                if (answerAction != null) {
+                    // Incoming call
+                    IslandCallManager.onIncomingCall(
+                        name = title.ifEmpty { "Incoming Call" },
+                        number = text,
+                        sourceAppName = appName,
+                        sourceAppIcon = appIcon,
+                        answer = answerAction.actionIntent,
+                        decline = declineAction?.actionIntent ?: notification.contentIntent
+                    )
+                } else {
+                    // Ongoing / Active call
+                    IslandCallManager.onCallActive(
+                        name = title.ifEmpty { "Active Call" },
+                        number = text,
+                        sourceAppName = appName,
+                        sourceAppIcon = appIcon,
+                        end = declineAction?.actionIntent ?: notification.contentIntent,
+                        startTimeOverride = if (notification.`when` > 0L) notification.`when` else 0L
+                    )
+                }
+                activeCallPackage = sbn.packageName
+                return
+            }
+
+            // 2. Check for Navigation (Google Maps)
+            val isNavigation = sbn.packageName == "com.google.android.apps.maps" ||
+                    notification.category == android.app.Notification.CATEGORY_NAVIGATION
+
+            if (isNavigation && (title.isNotEmpty() || text.isNotEmpty())) {
+                val pm = packageManager
+                val appIcon: Drawable? = try {
+                    pm.getApplicationIcon(sbn.packageName)
+                } catch (e: Exception) {
+                    null
+                }
+
+                NavigationManager.onNavigationNotification(
+                    title = title,
+                    text = text,
+                    subText = extras.getCharSequence("android.subText")?.toString() ?: "",
+                    icon = appIcon,
+                    intent = notification.contentIntent
+                )
+                activeNavigationPackage = sbn.packageName
+                return
+            }
+
+            // Ignore ongoing / foreground service sticky pins (unless call or navigation above)
+            if (sbn.isOngoing) return
 
             // Ignore progress bars (e.g. downloads, file transfers)
             val maxProgress = extras.getInt(android.app.Notification.EXTRA_PROGRESS_MAX, 0)
@@ -194,9 +304,6 @@ class IslandNotificationListener : NotificationListenerService() {
             // If notification is from the currently active media player, ignore so music isn't interrupted
             val currentMediaPkg = IslandOverlayManager.getCurrentMediaPackage()
             if (currentMediaPkg.isNotEmpty() && sbn.packageName == currentMediaPkg) return
-
-            val title = extras.getCharSequence("android.title")?.toString() ?: ""
-            val text = extras.getCharSequence("android.text")?.toString() ?: ""
 
             if (title.isEmpty() && text.isEmpty()) return
 
@@ -229,6 +336,18 @@ class IslandNotificationListener : NotificationListenerService() {
             // Extract native PendingIntent for direct, 100% reliable 1-tap app launch!
             val contentIntent: PendingIntent? = notification.contentIntent
 
+            // Extract Quick Reply RemoteInput & action intent if messaging app (WhatsApp, Telegram, SMS)
+            var quickReplyRemoteInput: android.app.RemoteInput? = null
+            var quickReplyPendingIntent: PendingIntent? = null
+
+            actions?.forEach { act ->
+                val rInputs = act.remoteInputs
+                if (rInputs != null && rInputs.isNotEmpty()) {
+                    quickReplyRemoteInput = rInputs[0]
+                    quickReplyPendingIntent = act.actionIntent
+                }
+            }
+
             // Standard Notification
             if (title.isNotEmpty() || text.isNotEmpty()) {
                 IslandOverlayManager.onNotificationReceived(
@@ -237,7 +356,9 @@ class IslandNotificationListener : NotificationListenerService() {
                     content = text,
                     appIcon = appIcon,
                     packageName = sbn.packageName,
-                    contentIntent = contentIntent
+                    contentIntent = contentIntent,
+                    remoteInput = quickReplyRemoteInput,
+                    replyIntent = quickReplyPendingIntent
                 )
             }
         } catch (e: Exception) {
@@ -249,6 +370,18 @@ class IslandNotificationListener : NotificationListenerService() {
         super.onNotificationRemoved(sbn)
         try {
             if (sbn == null || sbn.packageName == packageName) return
+
+            if (activeCallPackage.isNotEmpty() && sbn.packageName == activeCallPackage) {
+                IslandCallManager.onCallEnded()
+                activeCallPackage = ""
+                return
+            }
+
+            if (activeNavigationPackage.isNotEmpty() && sbn.packageName == activeNavigationPackage) {
+                NavigationManager.clearNavigation()
+                activeNavigationPackage = ""
+                return
+            }
 
             val currentMediaPkg = IslandOverlayManager.getCurrentMediaPackage()
             if (currentMediaPkg.isNotEmpty() && sbn.packageName == currentMediaPkg) {

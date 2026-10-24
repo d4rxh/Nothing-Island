@@ -23,6 +23,7 @@ class IslandRootLayout @JvmOverloads constructor(
     var onIslandTap: (() -> Unit)? = null
     var onIslandCollapse: (() -> Unit)? = null
     var onIslandSwipeDismiss: (() -> Unit)? = null
+    var onIslandSwipeNext: (() -> Unit)? = null
     var onOrientationChanged: (() -> Unit)? = null
 
     private var downTime = 0L
@@ -71,10 +72,14 @@ class IslandRootLayout @JvmOverloads constructor(
                     val dy = abs(event.rawY - downY)
                     val density = resources.displayMetrics.density
 
-                    // Horizontal swipe to minimize / dismiss
+                    // Horizontal swipe: switch between active events if multiple, or dismiss
                     val swipeThreshold = 55 * density
                     if (dx > swipeThreshold && dy < 35 * density && !isExpandedState) {
-                        onIslandSwipeDismiss?.invoke()
+                        if (onIslandSwipeNext != null) {
+                            onIslandSwipeNext?.invoke()
+                        } else {
+                            onIslandSwipeDismiss?.invoke()
+                        }
                         return true
                     }
 

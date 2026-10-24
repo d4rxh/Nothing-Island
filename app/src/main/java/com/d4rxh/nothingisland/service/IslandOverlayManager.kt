@@ -3,6 +3,7 @@ package com.d4rxh.nothingisland.service
 import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.app.PendingIntent
+import android.app.RemoteInput
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -15,6 +16,7 @@ import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -29,6 +31,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.animation.OvershootInterpolator
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -84,6 +87,27 @@ object IslandOverlayManager {
     private var btnNext: ImageButton? = null
     private var expandedNotificationBody: TextView? = null
 
+    // Call Controls Row
+    private var callControlsRow: LinearLayout? = null
+    private var btnDeclineCall: ImageButton? = null
+    private var btnAnswerCall: ImageButton? = null
+
+    // Quick Reply Row
+    private var quickReplyRow: LinearLayout? = null
+    private var replyEditText: EditText? = null
+    private var btnSendReply: ImageButton? = null
+
+    // Timer Controls Row
+    private var timerControlsRow: LinearLayout? = null
+    private var btnTimerReset: TextView? = null
+    private var btnTimerPlayPause: ImageButton? = null
+    private var btnTimerLap: TextView? = null
+
+    // Multi-Event Switcher Dots
+    private var eventIndicatorDots: LinearLayout? = null
+    private var dotEvent1: View? = null
+    private var dotEvent2: View? = null
+
     // Split Pill (Dual Island) views
     private var islandSubCapsule: LinearLayout? = null
     private var subCapsuleIcon: ImageView? = null
@@ -96,10 +120,23 @@ object IslandOverlayManager {
         CHARGING_COMPACT,
         NOTIFICATION_COMPACT,
         CRICKET_COMPACT,
+        CALL_COMPACT,
+        TIMER_COMPACT,
+        NAVIGATION_COMPACT,
+        DEVICE_EVENT_COMPACT,
         EXPANDED
     }
 
     private var currentState: State = State.IDLE
+
+    // Quick Reply state
+    private var activeRemoteInput: RemoteInput? = null
+    private var activeReplyIntent: PendingIntent? = null
+
+    // Device Event banner state
+    private var deviceEventTitle = ""
+    private var deviceEventSubtitle = ""
+    private var deviceEventDismissRunnable: Runnable? = null
 
     // Media state persistence
     private var isMusicPlaying = false
@@ -272,18 +309,25 @@ object IslandOverlayManager {
                 params.y = -targetX
             }
 
-            // Vertically hug the camera punch-hole along the short edge (portrait-style along the notch)
-            islandContainerRow?.orientation = LinearLayout.VERTICAL
-            islandCapsule?.layoutParams?.width = dpToPx(context, 38)
-            islandCapsule?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
-            compactContainer?.orientation = LinearLayout.VERTICAL
-            compactContainer?.layoutParams?.width = dpToPx(context, 38)
-            compactContainer?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
-            compactContainer?.setPadding(dpToPx(context, 4), dpToPx(context, 8), dpToPx(context, 4), dpToPx(context, 8))
-            islandSubCapsule?.layoutParams?.let { lp ->
-                if (lp is ViewGroup.MarginLayoutParams) {
-                    lp.topMargin = dpToPx(context, 6)
-                    lp.marginStart = 0
+            if (currentState == State.EXPANDED) {
+                // Full expansion in landscape mode without clipping
+                islandContainerRow?.orientation = LinearLayout.HORIZONTAL
+                islandCapsule?.layoutParams?.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                islandCapsule?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            } else {
+                // Vertically hug the camera punch-hole along the short edge (portrait-style along the notch)
+                islandContainerRow?.orientation = LinearLayout.VERTICAL
+                islandCapsule?.layoutParams?.width = dpToPx(context, 38)
+                islandCapsule?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                compactContainer?.orientation = LinearLayout.VERTICAL
+                compactContainer?.layoutParams?.width = dpToPx(context, 38)
+                compactContainer?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                compactContainer?.setPadding(dpToPx(context, 4), dpToPx(context, 8), dpToPx(context, 4), dpToPx(context, 8))
+                islandSubCapsule?.layoutParams?.let { lp ->
+                    if (lp is ViewGroup.MarginLayoutParams) {
+                        lp.topMargin = dpToPx(context, 6)
+                        lp.marginStart = 0
+                    }
                 }
             }
         } else {
@@ -342,6 +386,79 @@ object IslandOverlayManager {
 
         registerDisplayListener(context)
         registerBatteryReceiver(context)
+        DeviceEventsReceiver.register(context)
+
+        // Initialize Call Manager Callbacks
+        IslandCallManager.onCallStateChanged = { state ->
+            mainHandler.post {
+                if (state == IslandCallManager.CallState.INCOMING || state == IslandCallManager.CallState.ACTIVE) {
+                    updateState(State.CALL_COMPACT)
+                    if (state == IslandCallManager.CallState.INCOMING) {
+                        expandIsland()
+                    }
+                } else {
+                    restorePreviousMediaOrIdle()
+                }
+            }
+        }
+        IslandCallManager.onDurationTick = { durationStr ->
+            mainHandler.post {
+                if (currentState == State.CALL_COMPACT) {
+                    compactRightText?.text = durationStr
+                } else if (currentState == State.EXPANDED && IslandCallManager.currentState == IslandCallManager.CallState.ACTIVE) {
+                    expandedArtistText?.text = "Active Call • $durationStr"
+                }
+            }
+        }
+
+        // Initialize Timer Manager Callbacks
+        IslandTimerManager.onTimerTick = { _, _ ->
+            mainHandler.post {
+                if (currentState == State.TIMER_COMPACT) {
+                    compactRightText?.text = IslandTimerManager.getTimerDisplayString()
+                } else if (currentState == State.EXPANDED && IslandTimerManager.currentMode == IslandTimerManager.Mode.TIMER) {
+                    expandedTitleText?.text = IslandTimerManager.getTimerDisplayString()
+                }
+                updateSplitPillState()
+            }
+        }
+        IslandTimerManager.onStopwatchTick = { timeStr ->
+            mainHandler.post {
+                if (currentState == State.TIMER_COMPACT) {
+                    compactRightText?.text = timeStr
+                } else if (currentState == State.EXPANDED && IslandTimerManager.currentMode == IslandTimerManager.Mode.STOPWATCH) {
+                    expandedTitleText?.text = timeStr
+                }
+            }
+        }
+        IslandTimerManager.onStateChanged = { mode ->
+            mainHandler.post {
+                if (mode != IslandTimerManager.Mode.NONE) {
+                    if (currentState != State.EXPANDED) updateState(State.TIMER_COMPACT)
+                } else {
+                    restorePreviousMediaOrIdle()
+                }
+                updateSplitPillState()
+            }
+        }
+
+        // Initialize Navigation Callbacks
+        NavigationManager.onNavigationUpdate = {
+            mainHandler.post {
+                if (NavigationManager.isNavigating) {
+                    if (currentState != State.EXPANDED) updateState(State.NAVIGATION_COMPACT)
+                } else {
+                    restorePreviousMediaOrIdle()
+                }
+            }
+        }
+
+        // Initialize Device Events (Bluetooth, Headset, Ringer)
+        DeviceEventsReceiver.onDeviceEvent = { _, title, subtitle ->
+            mainHandler.post {
+                displayDeviceEvent(title, subtitle)
+            }
+        }
 
         mainHandler.post {
             try {
@@ -397,6 +514,23 @@ object IslandOverlayManager {
         btnPlayPause = view.findViewById(R.id.btnPlayPause)
         btnNext = view.findViewById(R.id.btnNext)
         expandedNotificationBody = view.findViewById(R.id.expandedNotificationBody)
+
+        callControlsRow = view.findViewById(R.id.callControlsRow)
+        btnDeclineCall = view.findViewById(R.id.btnDeclineCall)
+        btnAnswerCall = view.findViewById(R.id.btnAnswerCall)
+
+        quickReplyRow = view.findViewById(R.id.quickReplyRow)
+        replyEditText = view.findViewById(R.id.replyEditText)
+        btnSendReply = view.findViewById(R.id.btnSendReply)
+
+        timerControlsRow = view.findViewById(R.id.timerControlsRow)
+        btnTimerReset = view.findViewById(R.id.btnTimerReset)
+        btnTimerPlayPause = view.findViewById(R.id.btnTimerPlayPause)
+        btnTimerLap = view.findViewById(R.id.btnTimerLap)
+
+        eventIndicatorDots = view.findViewById(R.id.eventIndicatorDots)
+        dotEvent1 = view.findViewById(R.id.dotEvent1)
+        dotEvent2 = view.findViewById(R.id.dotEvent2)
 
         islandSubCapsule = view.findViewById(R.id.islandSubCapsule)
         subCapsuleIcon = view.findViewById(R.id.subCapsuleIcon)
@@ -474,6 +608,19 @@ object IslandOverlayManager {
         islandContainerRow = null
         islandCapsule = null
         compactContainer = null
+        callControlsRow = null
+        btnDeclineCall = null
+        btnAnswerCall = null
+        quickReplyRow = null
+        replyEditText = null
+        btnSendReply = null
+        timerControlsRow = null
+        btnTimerReset = null
+        btnTimerPlayPause = null
+        btnTimerLap = null
+        eventIndicatorDots = null
+        dotEvent1 = null
+        dotEvent2 = null
         islandSubCapsule = null
         subCapsuleIcon = null
         subCapsuleText = null
@@ -599,14 +746,146 @@ object IslandOverlayManager {
             IslandMediaManager.skipNext()
         }
 
-        // Split Secondary Capsule click expands battery status
+        // Horizontal swipe to switch active events (or collapse)
+        islandRoot?.onIslandSwipeNext = {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(context)
+            cycleToNextActiveEvent()
+        }
+
+        // Call Controls
+        btnAnswerCall?.setOnClickListener {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(it.context)
+            IslandCallManager.answerCall()
+        }
+
+        btnDeclineCall?.setOnClickListener {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(it.context)
+            IslandCallManager.declineOrEndCall()
+            collapseIsland()
+        }
+
+        // Quick Reply
+        btnSendReply?.setOnClickListener {
+            sendQuickReply(context)
+        }
+        replyEditText?.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                sendQuickReply(context)
+                true
+            } else false
+        }
+
+        // Timer Controls
+        btnTimerPlayPause?.setOnClickListener {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(it.context)
+            when (IslandTimerManager.currentMode) {
+                IslandTimerManager.Mode.TIMER -> {
+                    if (IslandTimerManager.isTimerRunning && !IslandTimerManager.isTimerPaused) {
+                        IslandTimerManager.pauseTimer()
+                        btnTimerPlayPause?.setImageResource(R.drawable.ic_play)
+                    } else {
+                        IslandTimerManager.resumeTimer()
+                        btnTimerPlayPause?.setImageResource(R.drawable.ic_pause)
+                    }
+                }
+                IslandTimerManager.Mode.STOPWATCH -> {
+                    if (IslandTimerManager.isStopwatchRunning && !IslandTimerManager.isStopwatchPaused) {
+                        IslandTimerManager.pauseStopwatch()
+                        btnTimerPlayPause?.setImageResource(R.drawable.ic_play)
+                    } else {
+                        IslandTimerManager.resumeStopwatch()
+                        btnTimerPlayPause?.setImageResource(R.drawable.ic_pause)
+                    }
+                }
+                IslandTimerManager.Mode.NONE -> {
+                    IslandTimerManager.startTimer(300L) // Default 5 min timer
+                    btnTimerPlayPause?.setImageResource(R.drawable.ic_pause)
+                }
+            }
+        }
+
+        btnTimerReset?.setOnClickListener {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
+            if (IslandTimerManager.currentMode == IslandTimerManager.Mode.TIMER) {
+                IslandTimerManager.resetTimer()
+            } else {
+                IslandTimerManager.resetStopwatch()
+            }
+        }
+
+        btnTimerLap?.setOnClickListener {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
+            if (IslandTimerManager.currentMode == IslandTimerManager.Mode.STOPWATCH) {
+                val lap = IslandTimerManager.recordLap()
+                expandedArtistText?.text = lap
+            } else if (IslandTimerManager.currentMode == IslandTimerManager.Mode.TIMER) {
+                IslandTimerManager.startTimer(IslandTimerManager.remainingTimerSeconds + 60L)
+            }
+        }
+
+        // Split Secondary Capsule click expands battery / timer status
         islandSubCapsule?.setOnClickListener {
             if (prefs.hapticsEnabled) overlayView?.let { v -> NothingHapticHelper.vibrateTick(v) }
             expandIsland()
         }
     }
 
+    private fun sendQuickReply(context: Context) {
+        val rInput = activeRemoteInput ?: return
+        val rIntent = activeReplyIntent ?: return
+        val text = replyEditText?.text?.toString()?.trim() ?: ""
+        if (text.isEmpty()) return
+
+        try {
+            val intent = Intent()
+            val bundle = Bundle()
+            bundle.putCharSequence(rInput.resultKey, text)
+            RemoteInput.addResultsToIntent(arrayOf(rInput), intent, bundle)
+            rIntent.send(context, 0, intent)
+
+            replyEditText?.setText("")
+            compactRightText?.text = "REPLY SENT"
+            NothingHapticHelper.vibratePop(context)
+            collapseIsland()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send quick reply: ${e.message}")
+        }
+    }
+
+    private fun getActiveEvents(): List<State> {
+        val list = mutableListOf<State>()
+        if (IslandCallManager.currentState != IslandCallManager.CallState.NONE) list.add(State.CALL_COMPACT)
+        if (NavigationManager.isNavigating) list.add(State.NAVIGATION_COMPACT)
+        if (IslandTimerManager.currentMode != IslandTimerManager.Mode.NONE) list.add(State.TIMER_COMPACT)
+        if (isMusicPlaying) list.add(State.MUSIC_COMPACT)
+        else if (currentTrackTitle.isNotEmpty() && pausedTimeoutRunnable != null) list.add(State.MUSIC_PAUSED_COMPACT)
+        if (isDeviceCharging) list.add(State.CHARGING_COMPACT)
+        if (currentCricketScore.isNotEmpty()) list.add(State.CRICKET_COMPACT)
+        return list
+    }
+
+    fun cycleToNextActiveEvent() {
+        val active = getActiveEvents()
+        if (active.size <= 1) {
+            collapseIsland()
+            return
+        }
+        val currentIndex = active.indexOf(currentState)
+        val nextIndex = (currentIndex + 1) % active.size
+        updateState(active[nextIndex])
+    }
+
     private fun handleExpandedCardClick(context: Context) {
+        if (NavigationManager.isNavigating) {
+            try {
+                NavigationManager.launchIntent?.send()
+                collapseIsland()
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "Navigation launch error: ${e.message}")
+            }
+        }
+
         if (hasActiveNotification) {
             handleNotificationLaunch(context)
             return
@@ -627,6 +906,8 @@ object IslandOverlayManager {
         activeNotificationPackage = ""
         activeNotificationIcon = null
         activeNotificationPendingIntent = null
+        activeRemoteInput = null
+        activeReplyIntent = null
     }
 
     private fun handleNotificationLaunch(context: Context) {
@@ -899,15 +1180,65 @@ object IslandOverlayManager {
     }
 
     private fun updateSplitPillState() {
-        if (currentState != State.EXPANDED && isMusicPlaying && isDeviceCharging) {
+        if (currentState == State.EXPANDED) {
+            islandSubCapsule?.visibility = View.GONE
+            return
+        }
+
+        if (isMusicPlaying && isDeviceCharging) {
             islandSubCapsule?.visibility = View.VISIBLE
             subCapsuleIcon?.setImageResource(R.drawable.ic_bolt)
             subCapsuleIcon?.setColorFilter(Color.parseColor("#00E676"))
             subCapsuleText?.text = "$currentBatteryPercent%"
             subCapsuleText?.visibility = View.VISIBLE
+        } else if (isMusicPlaying && IslandTimerManager.currentMode != IslandTimerManager.Mode.NONE) {
+            islandSubCapsule?.visibility = View.VISIBLE
+            subCapsuleIcon?.setImageResource(R.drawable.ic_timer)
+            subCapsuleIcon?.setColorFilter(Color.parseColor("#D71920"))
+            subCapsuleText?.text = if (IslandTimerManager.currentMode == IslandTimerManager.Mode.TIMER) {
+                IslandTimerManager.getTimerDisplayString()
+            } else {
+                IslandTimerManager.getStopwatchDisplayString().take(5)
+            }
+            subCapsuleText?.visibility = View.VISIBLE
+        } else if (isMusicPlaying && IslandCallManager.currentState != IslandCallManager.CallState.NONE) {
+            islandSubCapsule?.visibility = View.VISIBLE
+            subCapsuleIcon?.setImageResource(R.drawable.ic_call)
+            subCapsuleIcon?.setColorFilter(Color.parseColor("#00E676"))
+            subCapsuleText?.text = IslandCallManager.getDurationString()
+            subCapsuleText?.visibility = View.VISIBLE
         } else {
             islandSubCapsule?.visibility = View.GONE
         }
+    }
+
+    private fun displayDeviceEvent(title: String, subtitle: String) {
+        val context = appContext ?: return
+        val prefs = IslandPreferences(context)
+
+        deviceEventTitle = title
+        deviceEventSubtitle = subtitle
+
+        deviceEventDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+
+        compactLeftIcon?.setImageResource(R.drawable.ic_dot)
+        compactLeftIcon?.setColorFilter(Color.parseColor("#00E676"))
+        compactLeftIcon?.visibility = View.VISIBLE
+        compactLeftText?.visibility = View.GONE
+        centerCutoutSpacer?.visibility = View.VISIBLE
+        compactRightText?.text = title
+        compactRightText?.visibility = View.VISIBLE
+        compactEqualizer?.visibility = View.GONE
+
+        updateState(State.DEVICE_EVENT_COMPACT)
+        playChargingAnimation(0)
+
+        deviceEventDismissRunnable = Runnable {
+            if (currentState == State.DEVICE_EVENT_COMPACT) {
+                restorePreviousMediaOrIdle()
+            }
+        }
+        mainHandler.postDelayed(deviceEventDismissRunnable!!, 3500)
     }
 
     private fun playChargingAnimation(batteryPercent: Int) {
@@ -986,7 +1317,9 @@ object IslandOverlayManager {
         content: String,
         appIcon: Drawable?,
         packageName: String = "",
-        contentIntent: PendingIntent? = null
+        contentIntent: PendingIntent? = null,
+        remoteInput: RemoteInput? = null,
+        replyIntent: PendingIntent? = null
     ) {
         val context = appContext ?: return
         val prefs = IslandPreferences(context)
@@ -998,6 +1331,8 @@ object IslandOverlayManager {
         activeNotificationPackage = packageName
         activeNotificationIcon = appIcon
         activeNotificationPendingIntent = contentIntent
+        activeRemoteInput = remoteInput
+        activeReplyIntent = replyIntent
         hasActiveNotification = true
 
         mainHandler.post {
@@ -1168,7 +1503,13 @@ object IslandOverlayManager {
 
     private fun restorePreviousMediaOrIdle() {
         clearActiveNotification()
-        if (currentTrackTitle.isNotEmpty() && (isMusicPlaying || pausedTimeoutRunnable != null)) {
+        if (IslandCallManager.currentState != IslandCallManager.CallState.NONE) {
+            updateState(State.CALL_COMPACT)
+        } else if (NavigationManager.isNavigating) {
+            updateState(State.NAVIGATION_COMPACT)
+        } else if (IslandTimerManager.currentMode != IslandTimerManager.Mode.NONE) {
+            updateState(State.TIMER_COMPACT)
+        } else if (currentTrackTitle.isNotEmpty() && (isMusicPlaying || pausedTimeoutRunnable != null)) {
             restoreMusicCompactState(isPlaying = isMusicPlaying)
         } else if (isDeviceCharging) {
             displayChargingCompact()
@@ -1361,12 +1702,178 @@ object IslandOverlayManager {
 
                     islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
                 }
+                State.CALL_COMPACT -> {
+                    compactContainer?.visibility = View.VISIBLE
+                    expandedContainer?.visibility = View.GONE
+                    if (IslandCallManager.appIcon != null) {
+                        compactLeftIcon?.setImageDrawable(IslandCallManager.appIcon)
+                    } else {
+                        compactLeftIcon?.setImageResource(R.drawable.ic_call)
+                    }
+                    compactLeftIcon?.setColorFilter(Color.parseColor("#00E676"))
+                    compactLeftIcon?.visibility = View.VISIBLE
+                    compactLeftText?.visibility = View.GONE
+                    centerCutoutSpacer?.visibility = View.VISIBLE
+
+                    compactRightText?.text = if (IslandCallManager.currentState == IslandCallManager.CallState.INCOMING) "CALL" else IslandCallManager.getDurationString()
+                    compactRightText?.setTextColor(Color.parseColor("#00E676"))
+                    compactRightText?.visibility = View.VISIBLE
+                    compactEqualizer?.visibility = View.GONE
+                    islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
+                }
+                State.TIMER_COMPACT -> {
+                    compactContainer?.visibility = View.VISIBLE
+                    expandedContainer?.visibility = View.GONE
+                    compactLeftIcon?.setImageResource(R.drawable.ic_timer)
+                    compactLeftIcon?.setColorFilter(Color.parseColor("#D71920"))
+                    compactLeftIcon?.visibility = View.VISIBLE
+                    compactLeftText?.visibility = View.GONE
+                    centerCutoutSpacer?.visibility = View.VISIBLE
+
+                    compactRightText?.text = if (IslandTimerManager.currentMode == IslandTimerManager.Mode.TIMER) {
+                        IslandTimerManager.getTimerDisplayString()
+                    } else {
+                        IslandTimerManager.getStopwatchDisplayString()
+                    }
+                    compactRightText?.setTextColor(Color.WHITE)
+                    compactRightText?.visibility = View.VISIBLE
+                    compactEqualizer?.visibility = View.GONE
+                    islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
+                }
+                State.NAVIGATION_COMPACT -> {
+                    compactContainer?.visibility = View.VISIBLE
+                    expandedContainer?.visibility = View.GONE
+                    if (NavigationManager.appIcon != null) {
+                        compactLeftIcon?.setImageDrawable(NavigationManager.appIcon)
+                        compactLeftIcon?.clearColorFilter()
+                        compactLeftIcon?.visibility = View.VISIBLE
+                    } else {
+                        compactLeftIcon?.setImageResource(R.drawable.ic_navigation)
+                        compactLeftIcon?.setColorFilter(Color.parseColor("#00E676"))
+                        compactLeftIcon?.visibility = View.VISIBLE
+                    }
+                    compactLeftText?.visibility = View.GONE
+                    centerCutoutSpacer?.visibility = View.VISIBLE
+
+                    compactRightText?.text = NavigationManager.distanceText
+                    compactRightText?.setTextColor(Color.WHITE)
+                    compactRightText?.visibility = View.VISIBLE
+                    compactEqualizer?.visibility = View.GONE
+                    islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
+                }
+                State.DEVICE_EVENT_COMPACT -> {
+                    compactContainer?.visibility = View.VISIBLE
+                    expandedContainer?.visibility = View.GONE
+                    compactLeftIcon?.setImageResource(R.drawable.ic_dot)
+                    compactLeftIcon?.setColorFilter(Color.parseColor("#00E676"))
+                    compactLeftIcon?.visibility = View.VISIBLE
+                    compactLeftText?.visibility = View.GONE
+                    centerCutoutSpacer?.visibility = View.VISIBLE
+
+                    compactRightText?.text = deviceEventTitle
+                    compactRightText?.setTextColor(Color.WHITE)
+                    compactRightText?.visibility = View.VISIBLE
+                    compactEqualizer?.visibility = View.GONE
+                    islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
+                }
                 State.EXPANDED -> {
                     compactContainer?.visibility = View.GONE
                     expandedContainer?.visibility = View.VISIBLE
-                    if (hasActiveNotification && (activeNotificationTitle.isNotEmpty() || activeNotificationContent.isNotEmpty())) {
+
+                    // Multi-event switcher dots visibility
+                    val activeCount = getActiveEvents().size
+                    if (activeCount >= 2) {
+                        eventIndicatorDots?.visibility = View.VISIBLE
+                    } else {
+                        eventIndicatorDots?.visibility = View.GONE
+                    }
+
+                    if (IslandCallManager.currentState != IslandCallManager.CallState.NONE) {
+                        // 1. Call Expanded Card
                         mediaControlsRow?.visibility = View.GONE
+                        quickReplyRow?.visibility = View.GONE
+                        timerControlsRow?.visibility = View.GONE
+                        expandedNotificationBody?.visibility = View.GONE
+
+                        if (IslandCallManager.appIcon != null) {
+                            expandedAppIcon?.setImageDrawable(IslandCallManager.appIcon)
+                            expandedArtwork?.setImageDrawable(IslandCallManager.appIcon)
+                        } else {
+                            expandedAppIcon?.setImageResource(R.drawable.ic_call)
+                            expandedArtwork?.setImageResource(R.drawable.ic_call)
+                        }
+                        expandedArtwork?.visibility = View.VISIBLE
+
+                        expandedSourceAppText?.text = "${IslandCallManager.appName.uppercase()} // CALL"
+                        expandedTitleText?.text = IslandCallManager.callerName
+                        expandedArtistText?.text = if (IslandCallManager.currentState == IslandCallManager.CallState.INCOMING) {
+                            "Incoming Call • Tap Answer"
+                        } else {
+                            "Active Call • ${IslandCallManager.getDurationString()}"
+                        }
+
+                        callControlsRow?.visibility = View.VISIBLE
+                        btnAnswerCall?.visibility = if (IslandCallManager.currentState == IslandCallManager.CallState.INCOMING) View.VISIBLE else View.GONE
+                        btnDeclineCall?.visibility = View.VISIBLE
+                    } else if (NavigationManager.isNavigating) {
+                        // 2. Navigation Expanded Card
+                        mediaControlsRow?.visibility = View.GONE
+                        callControlsRow?.visibility = View.GONE
+                        quickReplyRow?.visibility = View.GONE
+                        timerControlsRow?.visibility = View.GONE
+                        expandedNotificationBody?.visibility = View.GONE
+
+                        if (NavigationManager.appIcon != null) {
+                            expandedAppIcon?.setImageDrawable(NavigationManager.appIcon)
+                            expandedArtwork?.setImageDrawable(NavigationManager.appIcon)
+                        } else {
+                            expandedAppIcon?.setImageResource(R.drawable.ic_navigation)
+                            expandedArtwork?.setImageResource(R.drawable.ic_navigation)
+                        }
+                        expandedArtwork?.visibility = View.VISIBLE
+
+                        expandedSourceAppText?.text = "GOOGLE MAPS // NAVIGATION"
+                        expandedTitleText?.text = NavigationManager.turnInstruction
+                        expandedArtistText?.text = "${NavigationManager.distanceText} • ${NavigationManager.destinationText}"
+                    } else if (IslandTimerManager.currentMode != IslandTimerManager.Mode.NONE) {
+                        // 3. Timer & Stopwatch Expanded Card
+                        mediaControlsRow?.visibility = View.GONE
+                        callControlsRow?.visibility = View.GONE
+                        quickReplyRow?.visibility = View.GONE
+                        expandedNotificationBody?.visibility = View.GONE
+
+                        expandedAppIcon?.setImageResource(R.drawable.ic_timer)
+                        expandedArtwork?.setImageResource(R.drawable.ic_timer)
+                        expandedArtwork?.visibility = View.VISIBLE
+
+                        expandedSourceAppText?.text = if (IslandTimerManager.currentMode == IslandTimerManager.Mode.TIMER) "NOTHING TIMER" else "NOTHING STOPWATCH"
+                        expandedTitleText?.text = if (IslandTimerManager.currentMode == IslandTimerManager.Mode.TIMER) {
+                            IslandTimerManager.getTimerDisplayString()
+                        } else {
+                            IslandTimerManager.getStopwatchDisplayString()
+                        }
+                        expandedArtistText?.text = if (IslandTimerManager.currentMode == IslandTimerManager.Mode.TIMER) {
+                            "Countdown Active"
+                        } else {
+                            IslandTimerManager.laps.firstOrNull() ?: "Stopwatch Running"
+                        }
+
+                        timerControlsRow?.visibility = View.VISIBLE
+                        btnTimerPlayPause?.setImageResource(
+                            if (IslandTimerManager.isTimerRunning && !IslandTimerManager.isTimerPaused ||
+                                IslandTimerManager.isStopwatchRunning && !IslandTimerManager.isStopwatchPaused) {
+                                R.drawable.ic_pause
+                            } else {
+                                R.drawable.ic_play
+                            }
+                        )
+                    } else if (hasActiveNotification && (activeNotificationTitle.isNotEmpty() || activeNotificationContent.isNotEmpty())) {
+                        // 4. Notification Card (with Quick Reply if messaging app)
+                        mediaControlsRow?.visibility = View.GONE
+                        callControlsRow?.visibility = View.GONE
+                        timerControlsRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.VISIBLE
+
                         if (activeNotificationIcon != null) {
                             expandedAppIcon?.setImageDrawable(activeNotificationIcon)
                             expandedArtwork?.setImageDrawable(activeNotificationIcon)
@@ -1379,6 +1886,13 @@ object IslandOverlayManager {
                         expandedTitleText?.text = activeNotificationTitle.ifEmpty { activeNotificationAppName }
                         expandedArtistText?.text = "Tap to open ${activeNotificationAppName.ifEmpty { "App" }}"
                         expandedNotificationBody?.text = if (activeNotificationContent.isNotEmpty()) activeNotificationContent else activeNotificationTitle
+
+                        if (activeRemoteInput != null) {
+                            quickReplyRow?.visibility = View.VISIBLE
+                            replyEditText?.requestFocus()
+                        } else {
+                            quickReplyRow?.visibility = View.GONE
+                        }
                     } else if (isMusicPlaying) {
                         mediaControlsRow?.visibility = View.VISIBLE
                         expandedNotificationBody?.visibility = View.GONE

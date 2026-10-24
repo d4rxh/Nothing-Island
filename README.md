@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/d4rxh/Nothing-Island/releases"><img src="https://img.shields.io/github/v/release/d4rxh/Nothing-Island?style=for-the-badge&color=D71920&label=RELEASE%20v1.0.14" alt="Release"/></a>
+  <a href="https://github.com/d4rxh/Nothing-Island/releases"><img src="https://img.shields.io/github/v/release/d4rxh/Nothing-Island?style=for-the-badge&color=D71920&label=RELEASE%20v1.0.15" alt="Release"/></a>
   <img src="https://img.shields.io/badge/LICENSED-MIT-white?style=for-the-badge" alt="MIT License"/>
   <img src="https://img.shields.io/badge/NOTHING%20OS-3.0%20READY-black?style=for-the-badge&logoColor=white" alt="Nothing OS 3.0 Ready"/>
   <img src="https://img.shields.io/badge/DATA%20PRIVACY-100%25%20ON--DEVICE-green?style=for-the-badge" alt="100% On-Device"/>
@@ -167,8 +167,8 @@ cd Nothing-Island
 
 ### Direct Download
 Grab the latest signed production APK directly from GitHub Releases:
-* **Release:** [Nothing Island v1.0.14](https://github.com/d4rxh/Nothing-Island/releases/tag/v1.0.14)
-* **Direct APK Download:** **[Nothing-Island-v1.0.14.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.14/Nothing-Island-v1.0.14.apk)**
+* **Release:** [Nothing Island v1.0.15](https://github.com/d4rxh/Nothing-Island/releases/tag/v1.0.15)
+* **Direct APK Download:** **[Nothing-Island-v1.0.15.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.15/Nothing-Island-v1.0.15.apk)**
 
 ---
 
