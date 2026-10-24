@@ -170,6 +170,7 @@ object IslandOverlayManager {
     private var activeReplyIntent: PendingIntent? = null
 
     // Device Event banner state
+    private var deviceEventIconRes: Int = R.drawable.ic_bluetooth
     private var deviceEventTitle = ""
     private var deviceEventSubtitle = ""
     private var deviceEventDismissRunnable: Runnable? = null
@@ -500,9 +501,9 @@ object IslandOverlayManager {
         }
 
         // Initialize Device Events (Bluetooth, Headset, Ringer)
-        DeviceEventsReceiver.onDeviceEvent = { _, title, subtitle ->
+        DeviceEventsReceiver.onDeviceEvent = { iconRes, title, subtitle ->
             mainHandler.post {
-                displayDeviceEvent(title, subtitle)
+                displayDeviceEvent(iconRes, title, subtitle)
             }
         }
 
@@ -1650,21 +1651,22 @@ object IslandOverlayManager {
         }
     }
 
-    private fun displayDeviceEvent(title: String, subtitle: String) {
+    private fun displayDeviceEvent(iconRes: Int, title: String, subtitle: String) {
         val context = appContext ?: return
         val prefs = IslandPreferences(context)
 
+        deviceEventIconRes = if (iconRes != 0) iconRes else R.drawable.ic_bluetooth
         deviceEventTitle = title
         deviceEventSubtitle = subtitle
 
         deviceEventDismissRunnable?.let { mainHandler.removeCallbacks(it) }
 
-        compactLeftIcon?.setImageResource(R.drawable.ic_dot)
+        compactLeftIcon?.setImageResource(deviceEventIconRes)
         compactLeftIcon?.setColorFilter(Color.parseColor("#00E676"))
         compactLeftIcon?.visibility = View.VISIBLE
         compactLeftText?.visibility = View.GONE
         centerCutoutSpacer?.visibility = View.VISIBLE
-        compactRightText?.text = title
+        compactRightText?.text = if (subtitle.isNotEmpty()) "$title • $subtitle" else title
         compactRightText?.visibility = View.VISIBLE
         compactEqualizer?.visibility = View.GONE
 
@@ -2161,18 +2163,25 @@ object IslandOverlayManager {
                 State.CALL_COMPACT -> {
                     compactContainer?.visibility = View.VISIBLE
                     expandedContainer?.visibility = View.GONE
-                    compactLeftIcon?.clearColorFilter()
-                    if (IslandCallManager.appIcon != null) {
-                        compactLeftIcon?.setImageDrawable(IslandCallManager.appIcon)
-                    } else {
-                        compactLeftIcon?.setImageResource(R.drawable.ic_call)
-                        compactLeftIcon?.setColorFilter(Color.parseColor("#00E676"))
-                    }
+                    
+                    // Authentic Nothing Call indicator: glowing green call receiver symbol
+                    compactLeftIcon?.setImageResource(R.drawable.ic_call)
+                    compactLeftIcon?.setColorFilter(Color.parseColor("#00E676"))
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
                     centerCutoutSpacer?.visibility = View.VISIBLE
 
-                    compactRightText?.text = if (IslandCallManager.currentState == IslandCallManager.CallState.INCOMING) "CALL" else IslandCallManager.getDurationString()
+                    val callerDisplayName = IslandCallManager.callerName.ifEmpty {
+                        if (IslandCallManager.callerNumber.isNotEmpty()) IslandCallManager.callerNumber else "INCOMING CALL"
+                    }
+                    val displayText = if (IslandCallManager.currentState == IslandCallManager.CallState.INCOMING) {
+                        callerDisplayName
+                    } else {
+                        val duration = IslandCallManager.getDurationString()
+                        "$callerDisplayName • $duration"
+                    }
+
+                    compactRightText?.text = displayText
                     compactRightText?.setTextColor(Color.parseColor("#00E676"))
                     compactRightText?.visibility = View.VISIBLE
                     compactEqualizer?.visibility = View.GONE
@@ -2245,13 +2254,13 @@ object IslandOverlayManager {
                 State.DEVICE_EVENT_COMPACT -> {
                     compactContainer?.visibility = View.VISIBLE
                     expandedContainer?.visibility = View.GONE
-                    compactLeftIcon?.setImageResource(R.drawable.ic_dot)
+                    compactLeftIcon?.setImageResource(if (deviceEventIconRes != 0) deviceEventIconRes else R.drawable.ic_bluetooth)
                     compactLeftIcon?.setColorFilter(Color.parseColor("#00E676"))
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
                     centerCutoutSpacer?.visibility = View.VISIBLE
 
-                    compactRightText?.text = deviceEventTitle
+                    compactRightText?.text = if (deviceEventSubtitle.isNotEmpty()) "$deviceEventTitle • $deviceEventSubtitle" else deviceEventTitle
                     compactRightText?.setTextColor(Color.WHITE)
                     compactRightText?.visibility = View.VISIBLE
                     compactEqualizer?.visibility = View.GONE

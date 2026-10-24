@@ -147,7 +147,7 @@ object IslandCallManager {
         }
 
         // 2. Notification Action PendingIntent
-        if (answerIntent != null && context != null) {
+        if (answerIntent != null) {
             try {
                 val options = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                     ActivityOptions.makeBasic().apply {
@@ -158,18 +158,31 @@ object IslandCallManager {
                 } else {
                     null
                 }
-                answerIntent?.send(context, 0, null, null, null, null, options)
+                
+                var sent = false
+                if (options != null) {
+                    try {
+                        answerIntent?.send(null, 0, null, null, null, null, options)
+                        sent = true
+                    } catch (e: Exception) {
+                        try {
+                            if (context != null) {
+                                answerIntent?.send(context, 0, null, null, null, null, options)
+                                sent = true
+                            }
+                        } catch (e2: Exception) {
+                            Log.w(TAG, "answerIntent send with options failed: ${e2.message}")
+                        }
+                    }
+                }
+                
+                if (!sent) {
+                    answerIntent?.send()
+                }
                 markCallAnswered()
                 return true
             } catch (e: Exception) {
                 Log.w(TAG, "answerIntent.send failed: ${e.message}")
-                try {
-                    answerIntent?.send()
-                    markCallAnswered()
-                    return true
-                } catch (e2: Exception) {
-                    Log.w(TAG, "Fallback answerIntent.send failed: ${e2.message}")
-                }
             }
         }
 
@@ -247,7 +260,7 @@ object IslandCallManager {
         }
 
         val targetIntent = if (currentState == CallState.INCOMING) declineIntent else endIntent
-        if (targetIntent != null && context != null) {
+        if (targetIntent != null) {
             try {
                 targetIntent.send()
                 onCallEnded()

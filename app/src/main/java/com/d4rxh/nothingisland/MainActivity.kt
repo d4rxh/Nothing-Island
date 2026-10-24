@@ -57,6 +57,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var badgeNotificationPermission: TextView
     private lateinit var cardAccessibilityPermission: LinearLayout
     private lateinit var badgeAccessibilityPermission: TextView
+    private lateinit var cardPhoneBluetoothPermission: LinearLayout
+    private lateinit var badgePhoneBluetoothPermission: TextView
 
     // Presets & Calibration Sliders
     private lateinit var btnResetDefaults: Button
@@ -147,6 +149,8 @@ class MainActivity : AppCompatActivity() {
         badgeNotificationPermission = findViewById(R.id.badgeNotificationPermission)
         cardAccessibilityPermission = findViewById(R.id.cardAccessibilityPermission)
         badgeAccessibilityPermission = findViewById(R.id.badgeAccessibilityPermission)
+        cardPhoneBluetoothPermission = findViewById(R.id.cardPhoneBluetoothPermission)
+        badgePhoneBluetoothPermission = findViewById(R.id.badgePhoneBluetoothPermission)
 
         btnResetDefaults = findViewById(R.id.btnResetDefaults)
         btnPresetPhone2 = findViewById(R.id.btnPresetPhone2)
@@ -217,6 +221,11 @@ class MainActivity : AppCompatActivity() {
         cardAccessibilityPermission.setOnClickListener {
             NothingHapticHelper.vibrateTick(it)
             requestAccessibilityPermission()
+        }
+
+        cardPhoneBluetoothPermission.setOnClickListener {
+            NothingHapticHelper.vibrateTick(it)
+            requestPhoneAndBluetoothPermissions()
         }
 
         // Test Buttons
@@ -524,8 +533,40 @@ class MainActivity : AppCompatActivity() {
             badgeAccessibilityPermission.setTextColor(
                 if (hasA11y) Color.parseColor("#4CAF50") else Color.parseColor("#D71920")
             )
+
+            val hasBluetooth = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else true
+            val hasPhone = checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            val hasPhoneBt = hasBluetooth && hasPhone
+            badgePhoneBluetoothPermission.text = if (hasPhoneBt) "ACTIVE" else "GRANT"
+            badgePhoneBluetoothPermission.setTextColor(
+                if (hasPhoneBt) Color.parseColor("#4CAF50") else Color.parseColor("#D71920")
+            )
         } catch (e: Exception) {
             Log.e("MainActivity", "Error checking permissions: ${e.message}")
+        }
+    }
+
+    private fun requestPhoneAndBluetoothPermissions() {
+        val perms = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            perms.add(android.Manifest.permission.BLUETOOTH_CONNECT)
+        }
+        perms.add(android.Manifest.permission.READ_PHONE_STATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            perms.add(android.Manifest.permission.ANSWER_PHONE_CALLS)
+        }
+        perms.add(android.Manifest.permission.READ_CONTACTS)
+
+        val ungranted = perms.filter {
+            checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+        if (ungranted.isNotEmpty()) {
+            requestPermissions(ungranted.toTypedArray(), 102)
+        } else {
+            Toast.makeText(this, "Call & Bluetooth permissions already active", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -586,7 +627,7 @@ class MainActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 101) {
+        if (requestCode == 101 || requestCode == 102) {
             updatePermissionBadges()
             if (Settings.canDrawOverlays(this)) {
                 startIslandServiceSafely()

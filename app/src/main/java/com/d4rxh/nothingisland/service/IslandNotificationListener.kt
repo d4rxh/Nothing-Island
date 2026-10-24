@@ -226,14 +226,22 @@ class IslandNotificationListener : NotificationListenerService() {
             val text = extras.getCharSequence("android.text")?.toString() ?: ""
             val actions = notification.actions
 
-            // 1. Check for Calls (Incoming or Ongoing Call from Dialer, Telecom, WhatsApp, Truecaller, etc.)
-            val isCall = notification.category == android.app.Notification.CATEGORY_CALL ||
+            val template = extras.getString("android.template", "")
+            val isCallStyle = template.contains("CallStyle")
+            val callType = extras.getInt("android.callType", -1)
+
+            // 1. Check for Calls (Incoming or Ongoing Call from Dialer, Telecom, WhatsApp, Truecaller, Telegram, etc.)
+            val isCall = isCallStyle ||
+                    notification.category == android.app.Notification.CATEGORY_CALL ||
                     sbn.packageName.contains("dialer") || sbn.packageName.contains("telecom") ||
                     sbn.packageName.contains("phone") || sbn.packageName.contains("truecaller") ||
                     sbn.packageName.contains("incall") ||
                     actions?.any {
                         val t = it.title?.toString()?.lowercase() ?: ""
-                        t.contains("answer") || t.contains("decline") || t.contains("reject") || t.contains("hang")
+                        it.semanticAction == android.app.Notification.Action.SEMANTIC_ACTION_CALL_ANSWER ||
+                        it.semanticAction == android.app.Notification.Action.SEMANTIC_ACTION_CALL_DECLINE ||
+                        t.contains("answer") || t.contains("decline") || t.contains("reject") || t.contains("hang") ||
+                        t.contains("accept") || t.contains("receive") || t.contains("pick") || t.contains("उत्तर")
                     } == true
 
             val callerCandidate = extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString()
@@ -258,26 +266,65 @@ class IslandNotificationListener : NotificationListenerService() {
                     null
                 }
 
-                val answerAction = actions?.firstOrNull {
-                    val t = it.title?.toString()?.lowercase() ?: ""
-                    t.contains("answer") || t.contains("accept") || t.contains("join")
+                // 1. Check native CallStyle extra
+                var answerPendingIntent: PendingIntent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    extras.getParcelable("android.answerIntent", PendingIntent::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    extras.getParcelable("android.answerIntent")
                 }
-                val declineAction = actions?.firstOrNull {
-                    val t = it.title?.toString()?.lowercase() ?: ""
-                    t.contains("decline") || t.contains("reject") || t.contains("end") || t.contains("hang") || t.contains("dismiss")
+
+                // 2. Check semanticAction or title in notification actions
+                if (answerPendingIntent == null) {
+                    val answerAction = actions?.firstOrNull {
+                        it.semanticAction == android.app.Notification.Action.SEMANTIC_ACTION_CALL_ANSWER ||
+                        it.title?.toString()?.lowercase()?.let { t ->
+                            t.contains("answer") || t.contains("accept") || t.contains("receive") ||
+                            t.contains("join") || t.contains("pick") || t.contains("उत्तर") || t.contains("हाँ")
+                        } == true
+                    }
+                    answerPendingIntent = answerAction?.actionIntent
+                }
+
+                // 3. Decline/End intent
+                var declinePendingIntent: PendingIntent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    extras.getParcelable("android.declineIntent", PendingIntent::class.java)
+                        ?: extras.getParcelable("android.hangUpIntent", PendingIntent::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    extras.getParcelable("android.declineIntent")
+                        ?: extras.getParcelable("android.hangUpIntent")
+                }
+
+                if (declinePendingIntent == null) {
+                    val declineAction = actions?.firstOrNull {
+                        it.semanticAction == android.app.Notification.Action.SEMANTIC_ACTION_CALL_DECLINE ||
+                        it.title?.toString()?.lowercase()?.let { t ->
+                            t.contains("decline") || t.contains("reject") || t.contains("end") ||
+                            t.contains("hang") || t.contains("dismiss") || t.contains("अस्वीकार")
+                        } == true
+                    }
+                    declinePendingIntent = declineAction?.actionIntent ?: notification.contentIntent
                 }
 
                 val finalCaller = callerCandidate.ifEmpty { "Incoming Call" }
 
-                if (answerAction != null) {
+                val isIncoming = callType == 1 || answerPendingIntent != null || actions?.any {
+                    it.semanticAction == android.app.Notification.Action.SEMANTIC_ACTION_CALL_ANSWER ||
+                    it.title?.toString()?.lowercase()?.let { t ->
+                        t.contains("answer") || t.contains("accept") || t.contains("receive") || t.contains("pick")
+                    } == true
+                } == true
+
+                if (isIncoming) {
                     // Incoming call
                     IslandCallManager.onIncomingCall(
                         name = finalCaller,
                         number = text,
                         sourceAppName = appName,
                         sourceAppIcon = appIcon,
-                        answer = answerAction.actionIntent,
-                        decline = declineAction?.actionIntent ?: notification.contentIntent
+                        answer = answerPendingIntent,
+                        decline = declinePendingIntent
                     )
                 } else {
                     // Ongoing / Active call
@@ -286,7 +333,7 @@ class IslandNotificationListener : NotificationListenerService() {
                         number = text,
                         sourceAppName = appName,
                         sourceAppIcon = appIcon,
-                        end = declineAction?.actionIntent ?: notification.contentIntent,
+                        end = declinePendingIntent,
                         startTimeOverride = if (notification.`when` > 0L) notification.`when` else 0L
                     )
                 }
@@ -321,8 +368,10 @@ class IslandNotificationListener : NotificationListenerService() {
             val isRecorder = sbn.packageName.contains("recorder") ||
                     sbn.packageName.contains("voicenote") ||
                     sbn.packageName.contains("soundrecorder") ||
+                    sbn.packageName.contains("audiorecorder") ||
                     title.contains("recording", ignoreCase = true) ||
-                    text.contains("recording", ignoreCase = true)
+                    text.contains("recording", ignoreCase = true) ||
+                    (title.contains("record", ignoreCase = true) && !sbn.packageName.contains("screen"))
 
             if (isRecorder && (title.isNotEmpty() || text.isNotEmpty())) {
                 val pm = packageManager
@@ -386,7 +435,33 @@ class IslandNotificationListener : NotificationListenerService() {
                 return
             }
 
-            // Ignore ongoing / foreground service sticky pins (unless call or navigation above)
+            val pm = packageManager
+            val appName = try {
+                val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
+                pm.getApplicationLabel(appInfo).toString()
+            } catch (e: Exception) {
+                sbn.packageName
+            }
+
+            val appIcon: Drawable? = try {
+                pm.getApplicationIcon(sbn.packageName)
+            } catch (e: Exception) {
+                null
+            }
+
+            // 5. Check if this is a live Cricket / Sports score notification BEFORE isOngoing check!
+            if (isCricketOrSportsNotification(sbn.packageName, title, text)) {
+                val scoreText = extractCricketScore(title, text)
+                IslandOverlayManager.onCricketScoreReceived(
+                    appName = appName,
+                    matchTitle = title,
+                    scoreText = scoreText,
+                    appIcon = appIcon
+                )
+                return
+            }
+
+            // Ignore ongoing / foreground service sticky pins (unless call, navigation, recorder, timer, cricket handled above)
             if (sbn.isOngoing) return
 
             // Ignore progress bars (e.g. downloads, file transfers)
@@ -404,32 +479,6 @@ class IslandNotificationListener : NotificationListenerService() {
             if (currentMediaPkg.isNotEmpty() && sbn.packageName == currentMediaPkg) return
 
             if (title.isEmpty() && text.isEmpty()) return
-
-            val pm = packageManager
-            val appName = try {
-                val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
-                pm.getApplicationLabel(appInfo).toString()
-            } catch (e: Exception) {
-                sbn.packageName
-            }
-
-            val appIcon: Drawable? = try {
-                pm.getApplicationIcon(sbn.packageName)
-            } catch (e: Exception) {
-                null
-            }
-
-            // Check if this is a live Cricket / Sports score notification
-            if (isCricketOrSportsNotification(sbn.packageName, title, text)) {
-                val scoreText = extractCricketScore(title, text)
-                IslandOverlayManager.onCricketScoreReceived(
-                    appName = appName,
-                    matchTitle = title,
-                    scoreText = scoreText,
-                    appIcon = appIcon
-                )
-                return
-            }
 
             // Extract native PendingIntent for direct, 100% reliable 1-tap app launch!
             val contentIntent: PendingIntent? = notification.contentIntent
@@ -513,25 +562,31 @@ class IslandNotificationListener : NotificationListenerService() {
             "com.cricbuzz.android",
             "com.espncricinfo",
             "org.crex.app",
-            "com.sportskeeda"
+            "com.sportskeeda",
+            "com.google.android.googlequicksearchbox"
         )
         val combined = "$title $text".lowercase()
-        val cricketScoreRegex = Regex("""\b\d{1,3}/\d{1,2}\b""")
+        val cricketScoreRegex = Regex("""\b\d{1,3}/\d{0,2}\b""")
 
         if (sportsPackages.contains(packageName)) {
             // Check if it looks like a score or match
             val hasScoreIndicators = combined.contains(" vs ") || combined.contains(" v ") ||
-                    cricketScoreRegex.containsMatchIn(combined) || combined.contains("ov") || combined.contains("target")
+                    cricketScoreRegex.containsMatchIn(combined) || combined.contains("ov") ||
+                    combined.contains("target") || combined.contains("cricket") ||
+                    combined.contains("score") || combined.contains("innings") || combined.contains("opt to")
             if (hasScoreIndicators) return true
         }
 
-        // Generic pattern for sports notifications with cricket score pattern like "184/3" or "45/1"
+        // Generic pattern for sports notifications with cricket score pattern like "184/3" or "45/1" or "201-4"
         val hasCricketKeywords = combined.contains("cricket") ||
                 combined.contains(" csk ") || combined.contains(" rcb ") || combined.contains(" mi ") ||
-                combined.contains(" ind ") || combined.contains(" aus ") || combined.contains(" eng ")
-        val hasScorePattern = cricketScoreRegex.containsMatchIn(combined)
+                combined.contains(" ind ") || combined.contains(" aus ") || combined.contains(" eng ") ||
+                combined.contains(" pak ") || combined.contains(" sa ") || combined.contains(" nz ") ||
+                combined.contains("ipl") || combined.contains("t20") || combined.contains("world cup") ||
+                combined.contains("india") || combined.contains("australia")
+        val hasScorePattern = cricketScoreRegex.containsMatchIn(combined) || combined.contains(" ov")
 
-        return hasCricketKeywords && hasScorePattern
+        return hasCricketKeywords && (hasScorePattern || combined.contains(" vs ") || combined.contains(" v "))
     }
 
     private fun extractCricketScore(title: String, text: String): String {
