@@ -1601,13 +1601,13 @@ object IslandOverlayManager {
                             }
                         }, 3500)
                     } else if (prefs.batteryAlertsEnabled && batteryPercent >= 100) {
-                        displayDeviceEvent("BATTERY FULL", "100% Charged")
+                        displayDeviceEvent(R.drawable.ic_bolt, "BATTERY FULL", "100% Charged")
                     }
                 } else {
                     // Charger disconnected
                     updateSplitPillState()
                     if (prefs.batteryAlertsEnabled && batteryPercent <= 15) {
-                        displayDeviceEvent("LOW BATTERY", "$batteryPercent% remaining")
+                        displayDeviceEvent(R.drawable.ic_power, "LOW BATTERY", "$batteryPercent% remaining")
                     } else if (currentState == State.CHARGING_COMPACT) {
                         restorePreviousMediaOrIdle()
                     }
@@ -1651,7 +1651,7 @@ object IslandOverlayManager {
         }
     }
 
-    private fun displayDeviceEvent(iconRes: Int, title: String, subtitle: String) {
+    private fun displayDeviceEvent(iconRes: Int = R.drawable.ic_bluetooth, title: String, subtitle: String) {
         val context = appContext ?: return
         val prefs = IslandPreferences(context)
 

@@ -238,8 +238,7 @@ class IslandNotificationListener : NotificationListenerService() {
                     sbn.packageName.contains("incall") ||
                     actions?.any {
                         val t = it.title?.toString()?.lowercase() ?: ""
-                        it.semanticAction == android.app.Notification.Action.SEMANTIC_ACTION_CALL_ANSWER ||
-                        it.semanticAction == android.app.Notification.Action.SEMANTIC_ACTION_CALL_DECLINE ||
+                        it.semanticAction == android.app.Notification.Action.SEMANTIC_ACTION_CALL ||
                         t.contains("answer") || t.contains("decline") || t.contains("reject") || t.contains("hang") ||
                         t.contains("accept") || t.contains("receive") || t.contains("pick") || t.contains("उत्तर")
                     } == true
@@ -277,7 +276,6 @@ class IslandNotificationListener : NotificationListenerService() {
                 // 2. Check semanticAction or title in notification actions
                 if (answerPendingIntent == null) {
                     val answerAction = actions?.firstOrNull {
-                        it.semanticAction == android.app.Notification.Action.SEMANTIC_ACTION_CALL_ANSWER ||
                         it.title?.toString()?.lowercase()?.let { t ->
                             t.contains("answer") || t.contains("accept") || t.contains("receive") ||
                             t.contains("join") || t.contains("pick") || t.contains("उत्तर") || t.contains("हाँ")
@@ -298,7 +296,6 @@ class IslandNotificationListener : NotificationListenerService() {
 
                 if (declinePendingIntent == null) {
                     val declineAction = actions?.firstOrNull {
-                        it.semanticAction == android.app.Notification.Action.SEMANTIC_ACTION_CALL_DECLINE ||
                         it.title?.toString()?.lowercase()?.let { t ->
                             t.contains("decline") || t.contains("reject") || t.contains("end") ||
                             t.contains("hang") || t.contains("dismiss") || t.contains("अस्वीकार")
@@ -310,7 +307,6 @@ class IslandNotificationListener : NotificationListenerService() {
                 val finalCaller = callerCandidate.ifEmpty { "Incoming Call" }
 
                 val isIncoming = callType == 1 || answerPendingIntent != null || actions?.any {
-                    it.semanticAction == android.app.Notification.Action.SEMANTIC_ACTION_CALL_ANSWER ||
                     it.title?.toString()?.lowercase()?.let { t ->
                         t.contains("answer") || t.contains("accept") || t.contains("receive") || t.contains("pick")
                     } == true
