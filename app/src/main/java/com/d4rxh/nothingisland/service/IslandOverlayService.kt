@@ -81,19 +81,23 @@ class IslandOverlayService : Service() {
 
                     when (state) {
                         android.telephony.TelephonyManager.EXTRA_STATE_RINGING -> {
-                            val name = if (incomingNumber.isNotEmpty()) incomingNumber else "Incoming Call"
-                            IslandCallManager.onIncomingCall(
-                                name = name,
-                                number = incomingNumber,
-                                sourceAppName = "PHONE"
-                            )
+                            if (IslandCallManager.currentState != IslandCallManager.CallState.INCOMING) {
+                                val name = if (incomingNumber.isNotEmpty()) incomingNumber else "Incoming Call"
+                                IslandCallManager.onIncomingCall(
+                                    name = name,
+                                    number = incomingNumber,
+                                    sourceAppName = "PHONE"
+                                )
+                            }
                         }
                         android.telephony.TelephonyManager.EXTRA_STATE_OFFHOOK -> {
-                            IslandCallManager.onCallActive(
-                                name = "Active Call",
-                                number = incomingNumber,
-                                sourceAppName = "PHONE"
-                            )
+                            if (IslandCallManager.currentState != IslandCallManager.CallState.ACTIVE) {
+                                IslandCallManager.onCallActive(
+                                    name = "Active Call",
+                                    number = incomingNumber,
+                                    sourceAppName = "PHONE"
+                                )
+                            }
                         }
                         android.telephony.TelephonyManager.EXTRA_STATE_IDLE -> {
                             IslandCallManager.onCallEnded()

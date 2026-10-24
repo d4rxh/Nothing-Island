@@ -1,12 +1,22 @@
 package com.d4rxh.nothingisland.service
 
+import android.app.ActivityOptions
 import android.app.PendingIntent
+import android.content.Context
 import android.graphics.drawable.Drawable
+import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.telecom.Call
+import android.telecom.TelecomManager
+import android.util.Log
+import android.view.KeyEvent
 
 object IslandCallManager {
+
+    private const val TAG = "IslandCallManager"
 
     enum class CallState {
         NONE,
@@ -39,6 +49,9 @@ object IslandCallManager {
     var endIntent: PendingIntent? = null
         private set
 
+    var activeDirectCall: Call? = null
+        private set
+
     private var callStartTime: Long = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
     private var durationTickerRunnable: Runnable? = null
@@ -52,16 +65,20 @@ object IslandCallManager {
         sourceAppName: String = "PHONE",
         sourceAppIcon: Drawable? = null,
         answer: PendingIntent? = null,
-        decline: PendingIntent? = null
+        decline: PendingIntent? = null,
+        directCall: Call? = null
     ) {
         currentState = CallState.INCOMING
         callerName = name.ifEmpty { "Incoming Call" }
         callerNumber = number
-        appName = sourceAppName
-        appIcon = sourceAppIcon
-        answerIntent = answer
-        declineIntent = decline
-        endIntent = decline
+        appName = sourceAppName.ifEmpty { "PHONE" }
+        if (sourceAppIcon != null) appIcon = sourceAppIcon
+        if (answer != null) answerIntent = answer
+        if (decline != null) {
+            declineIntent = decline
+            endIntent = decline
+        }
+        if (directCall != null) activeDirectCall = directCall
 
         stopDurationTicker()
         onCallStateChanged?.invoke(currentState)
@@ -73,14 +90,16 @@ object IslandCallManager {
         sourceAppName: String = "PHONE",
         sourceAppIcon: Drawable? = null,
         end: PendingIntent? = null,
-        startTimeOverride: Long = 0L
+        startTimeOverride: Long = 0L,
+        directCall: Call? = null
     ) {
         currentState = CallState.ACTIVE
         callerName = name.ifEmpty { "Active Call" }
         callerNumber = number
-        appName = sourceAppName
-        appIcon = sourceAppIcon
-        endIntent = end
+        appName = sourceAppName.ifEmpty { "PHONE" }
+        if (sourceAppIcon != null) appIcon = sourceAppIcon
+        if (end != null) endIntent = end
+        if (directCall != null) activeDirectCall = directCall
         callStartTime = if (startTimeOverride > 0L) startTimeOverride else SystemClock.elapsedRealtime()
 
         startDurationTicker()
@@ -93,66 +112,178 @@ object IslandCallManager {
         stopDurationTicker()
         onCallStateChanged?.invoke(currentState)
 
-        // Clear after 3 seconds
         mainHandler.postDelayed({
             if (currentState == CallState.ENDED) {
                 resetCall()
                 onCallStateChanged?.invoke(currentState)
             }
-        }, 3000)
+        }, 2000)
     }
 
-    fun answerCall(context: android.content.Context? = null): Boolean {
-        if (answerIntent != null) {
-            return try {
-                answerIntent?.send()
-                currentState = CallState.ACTIVE
-                callStartTime = SystemClock.elapsedRealtime()
-                startDurationTicker()
-                onCallStateChanged?.invoke(currentState)
-                true
+    /**
+     * Universal call answering with 4-tier redundancy:
+     * 1. Direct Telecom InCallService Call.answer()
+     * 2. Notification Action PendingIntent.send() with background activity start allowed
+     * 3. TelecomManager.acceptRingingCall()
+     * 4. Universal AudioManager HEADSETHOOK media key simulation
+     */
+    fun answerCall(context: Context?): Boolean {
+        Log.i(TAG, "Attempting to answer call (directCall=${activeDirectCall != null}, answerIntent=${answerIntent != null})")
+
+        // 1. InCallService Direct Call
+        if (NothingInCallService.answerCurrentCall()) {
+            markCallAnswered()
+            return true
+        }
+
+        if (activeDirectCall != null) {
+            try {
+                activeDirectCall?.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY)
+                markCallAnswered()
+                return true
             } catch (e: Exception) {
-                false
+                Log.w(TAG, "Direct call answer failed: ${e.message}")
             }
         }
-        if (context != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+
+        // 2. Notification Action PendingIntent
+        if (answerIntent != null && context != null) {
             try {
-                val tm = context.getSystemService(android.content.Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
-                tm?.acceptRingingCall()
-                currentState = CallState.ACTIVE
-                callStartTime = SystemClock.elapsedRealtime()
-                startDurationTicker()
-                onCallStateChanged?.invoke(currentState)
+                val options = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    ActivityOptions.makeBasic().apply {
+                        pendingIntentBackgroundActivityStartMode = ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+                    }.toBundle()
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    ActivityOptions.makeBasic().toBundle()
+                } else {
+                    null
+                }
+                answerIntent?.send(context, 0, null, null, null, null, options)
+                markCallAnswered()
                 return true
+            } catch (e: Exception) {
+                Log.w(TAG, "answerIntent.send failed: ${e.message}")
+                try {
+                    answerIntent?.send()
+                    markCallAnswered()
+                    return true
+                } catch (e2: Exception) {
+                    Log.w(TAG, "Fallback answerIntent.send failed: ${e2.message}")
+                }
+            }
+        }
+
+        // 3. TelecomManager acceptRingingCall
+        if (context != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+                tm?.acceptRingingCall()
+                markCallAnswered()
+                return true
+            } catch (e: Exception) {
+                Log.w(TAG, "TelecomManager.acceptRingingCall failed: ${e.message}")
+            }
+        }
+
+        // 4. Universal Headset Hook Media Key event (answers calls on all Android phones)
+        if (context != null) {
+            try {
+                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                if (audioManager != null) {
+                    val down = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_HEADSETHOOK)
+                    val up = KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_HEADSETHOOK)
+                    audioManager.dispatchMediaKeyEvent(down)
+                    audioManager.dispatchMediaKeyEvent(up)
+                    markCallAnswered()
+                    return true
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Media key answer failed: ${e.message}")
+            }
+        }
+
+        return false
+    }
+
+    private fun markCallAnswered() {
+        currentState = CallState.ACTIVE
+        callStartTime = SystemClock.elapsedRealtime()
+        startDurationTicker()
+        onCallStateChanged?.invoke(currentState)
+    }
+
+    /**
+     * Universal call reject/hangup with 4-tier redundancy:
+     * 1. Direct Telecom InCallService Call.disconnect() / reject()
+     * 2. Notification Action PendingIntent.send()
+     * 3. TelecomManager.endCall()
+     * 4. Universal AudioManager HEADSETHOOK media key event
+     */
+    fun declineOrEndCall(context: Context?): Boolean {
+        Log.i(TAG, "Attempting to decline/end call")
+
+        if (NothingInCallService.declineOrEndCurrentCall()) {
+            onCallEnded()
+            return true
+        }
+
+        if (activeDirectCall != null) {
+            try {
+                if (currentState == CallState.INCOMING) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        activeDirectCall?.reject(Call.REJECT_REASON_DECLINED)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        activeDirectCall?.reject(false, null)
+                    }
+                } else {
+                    activeDirectCall?.disconnect()
+                }
+                onCallEnded()
+                return true
+            } catch (e: Exception) {
+                Log.w(TAG, "Direct call decline failed: ${e.message}")
+            }
+        }
+
+        val targetIntent = if (currentState == CallState.INCOMING) declineIntent else endIntent
+        if (targetIntent != null && context != null) {
+            try {
+                targetIntent.send()
+                onCallEnded()
+                return true
+            } catch (e: Exception) {
+                Log.w(TAG, "declineIntent.send failed: ${e.message}")
+            }
+        }
+
+        if (context != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                val tm = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+                if (tm?.endCall() == true) {
+                    onCallEnded()
+                    return true
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "TelecomManager.endCall failed: ${e.message}")
+            }
+        }
+
+        // Universal headset hook fallback
+        if (context != null) {
+            try {
+                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                if (audioManager != null) {
+                    val down = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_HEADSETHOOK)
+                    val up = KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_HEADSETHOOK)
+                    audioManager.dispatchMediaKeyEvent(down)
+                    audioManager.dispatchMediaKeyEvent(up)
+                }
             } catch (e: Exception) {
                 // Ignore
             }
         }
-        return false
-    }
 
-    fun declineOrEndCall(context: android.content.Context? = null): Boolean {
-        val intent = if (currentState == CallState.INCOMING) declineIntent else endIntent
-        if (intent != null) {
-            return try {
-                intent.send()
-                onCallEnded()
-                true
-            } catch (e: Exception) {
-                onCallEnded()
-                false
-            }
-        }
-        if (context != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-            try {
-                val tm = context.getSystemService(android.content.Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
-                tm?.endCall()
-                onCallEnded()
-                return true
-            } catch (e: Exception) {
-                onCallEnded()
-            }
-        }
         onCallEnded()
         return false
     }
@@ -198,6 +329,7 @@ object IslandCallManager {
         answerIntent = null
         declineIntent = null
         endIntent = null
+        activeDirectCall = null
         callStartTime = 0L
     }
 }

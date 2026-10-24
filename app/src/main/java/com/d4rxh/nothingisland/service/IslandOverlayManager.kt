@@ -1573,7 +1573,7 @@ object IslandOverlayManager {
                     expandedAppIcon?.setImageResource(R.drawable.ic_bolt)
                     expandedArtwork?.setImageResource(R.drawable.ic_bolt)
                     expandedArtwork?.visibility = View.VISIBLE
-                    expandedSourceAppText?.text = "FAST CHARGING // GLYPH"
+                    expandedSourceAppText?.text = "FAST CHARGING • GLYPH"
                     expandedTitleText?.text = "BATTERY CHARGING"
                     expandedArtistText?.text = "$batteryPercent% • Connected to Power"
                     expandedNotificationBody?.text = "$batteryPercent% • Connected to Power"
@@ -1814,7 +1814,8 @@ object IslandOverlayManager {
                     expandedArtwork?.visibility = View.GONE
                 }
 
-                expandedSourceAppText?.text = "${appName.uppercase()} // NOTIFICATION"
+                val notifSource = appName.ifEmpty { "NOTIFICATION" }.uppercase()
+                expandedSourceAppText?.text = "$notifSource • NOTIFICATION"
                 expandedTitleText?.text = title.ifEmpty { appName }
                 expandedArtistText?.text = "Tap to open ${appName.ifEmpty { "App" }}"
                 mediaControlsRow?.visibility = View.GONE
@@ -1935,7 +1936,8 @@ object IslandOverlayManager {
             expandedArtwork?.visibility = View.VISIBLE
         }
 
-        expandedSourceAppText?.text = "LIVE CRICKET // ${currentCricketAppName.uppercase()}"
+        val cricketSource = currentCricketAppName.ifEmpty { "CRICKET" }.uppercase()
+        expandedSourceAppText?.text = "$cricketSource • LIVE MATCH"
         expandedTitleText?.text = currentCricketMatch
         expandedArtistText?.text = currentCricketScore
         mediaControlsRow?.visibility = View.GONE
@@ -2159,12 +2161,13 @@ object IslandOverlayManager {
                 State.CALL_COMPACT -> {
                     compactContainer?.visibility = View.VISIBLE
                     expandedContainer?.visibility = View.GONE
+                    compactLeftIcon?.clearColorFilter()
                     if (IslandCallManager.appIcon != null) {
                         compactLeftIcon?.setImageDrawable(IslandCallManager.appIcon)
                     } else {
                         compactLeftIcon?.setImageResource(R.drawable.ic_call)
+                        compactLeftIcon?.setColorFilter(Color.parseColor("#00E676"))
                     }
-                    compactLeftIcon?.setColorFilter(Color.parseColor("#00E676"))
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
                     centerCutoutSpacer?.visibility = View.VISIBLE
@@ -2273,19 +2276,31 @@ object IslandOverlayManager {
                         timerControlsRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.GONE
 
+                        expandedAppIcon?.clearColorFilter()
+                        expandedArtwork?.clearColorFilter()
+
                         if (IslandCallManager.appIcon != null) {
                             expandedAppIcon?.setImageDrawable(IslandCallManager.appIcon)
                             expandedArtwork?.setImageDrawable(IslandCallManager.appIcon)
+                            expandedArtwork?.setBackgroundResource(R.drawable.bg_nothing_card)
+                            expandedArtwork?.setPadding(0, 0, 0, 0)
                         } else {
                             expandedAppIcon?.setImageResource(R.drawable.ic_call)
+                            expandedAppIcon?.setColorFilter(Color.parseColor("#00E676"))
                             expandedArtwork?.setImageResource(R.drawable.ic_call)
+                            expandedArtwork?.setColorFilter(Color.WHITE)
+                            expandedArtwork?.setBackgroundResource(R.drawable.bg_green_pill)
+                            val pad = dpToPx(context, 10)
+                            expandedArtwork?.setPadding(pad, pad, pad, pad)
                         }
                         expandedArtwork?.visibility = View.VISIBLE
 
-                        expandedSourceAppText?.text = "${IslandCallManager.appName.uppercase()} // CALL"
-                        expandedTitleText?.text = IslandCallManager.callerName
+                        val callApp = IslandCallManager.appName.ifEmpty { "PHONE" }.uppercase()
+                        val callStatus = if (IslandCallManager.currentState == IslandCallManager.CallState.INCOMING) "INCOMING CALL" else "ACTIVE CALL"
+                        expandedSourceAppText?.text = "$callApp • $callStatus"
+                        expandedTitleText?.text = IslandCallManager.callerName.ifEmpty { "Call" }
                         expandedArtistText?.text = if (IslandCallManager.currentState == IslandCallManager.CallState.INCOMING) {
-                            "Incoming Call • Tap Answer"
+                            if (IslandCallManager.callerNumber.isNotEmpty()) IslandCallManager.callerNumber else "Incoming Call • Tap Answer"
                         } else {
                             "Active Call • ${IslandCallManager.getDurationString()}"
                         }
@@ -2301,6 +2316,9 @@ object IslandOverlayManager {
                         callControlsRow?.visibility = View.GONE
                         expandedEqualizer?.visibility = View.GONE
 
+                        expandedArtwork?.setPadding(0, 0, 0, 0)
+                        expandedArtwork?.setBackgroundResource(R.drawable.bg_nothing_card)
+
                         if (recorderAppIcon != null) {
                             expandedAppIcon?.setImageDrawable(recorderAppIcon)
                             expandedArtwork?.setImageDrawable(recorderAppIcon)
@@ -2311,7 +2329,8 @@ object IslandOverlayManager {
                             expandedArtwork?.setColorFilter(Color.parseColor("#D71920"))
                         }
                         expandedArtwork?.visibility = View.VISIBLE
-                        expandedSourceAppText?.text = "VOICE RECORDER // ${recorderAppName.uppercase()}"
+                        val recApp = recorderAppName.ifEmpty { "RECORDER" }.uppercase()
+                        expandedSourceAppText?.text = "$recApp • RECORDING"
                         expandedTitleText?.text = recorderTitle.ifEmpty { "RECORDING" }
                         expandedArtistText?.text = recorderText.ifEmpty { "Audio recording active" }
                         expandedNotificationBody?.visibility = View.VISIBLE
@@ -2324,6 +2343,9 @@ object IslandOverlayManager {
                         callControlsRow?.visibility = View.GONE
                         expandedEqualizer?.visibility = View.GONE
 
+                        expandedArtwork?.setPadding(0, 0, 0, 0)
+                        expandedArtwork?.setBackgroundResource(R.drawable.bg_nothing_card)
+
                         if (externalClockAppIcon != null) {
                             expandedAppIcon?.setImageDrawable(externalClockAppIcon)
                             expandedArtwork?.setImageDrawable(externalClockAppIcon)
@@ -2332,7 +2354,8 @@ object IslandOverlayManager {
                             expandedArtwork?.setImageResource(R.drawable.ic_timer)
                         }
                         expandedArtwork?.visibility = View.VISIBLE
-                        expandedSourceAppText?.text = externalClockAppName.uppercase()
+                        val clockApp = externalClockAppName.ifEmpty { "CLOCK" }.uppercase()
+                        expandedSourceAppText?.text = "$clockApp • TIMER"
                         expandedTitleText?.text = externalClockTitle
                         expandedArtistText?.text = externalClockText
                         expandedNotificationBody?.visibility = View.VISIBLE
@@ -2345,6 +2368,9 @@ object IslandOverlayManager {
                         timerControlsRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.GONE
 
+                        expandedArtwork?.setPadding(0, 0, 0, 0)
+                        expandedArtwork?.setBackgroundResource(R.drawable.bg_nothing_card)
+
                         if (NavigationManager.appIcon != null) {
                             expandedAppIcon?.setImageDrawable(NavigationManager.appIcon)
                             expandedArtwork?.setImageDrawable(NavigationManager.appIcon)
@@ -2354,7 +2380,7 @@ object IslandOverlayManager {
                         }
                         expandedArtwork?.visibility = View.VISIBLE
 
-                        expandedSourceAppText?.text = "GOOGLE MAPS // NAVIGATION"
+                        expandedSourceAppText?.text = "GOOGLE MAPS • NAVIGATION"
                         expandedTitleText?.text = NavigationManager.turnInstruction
                         expandedArtistText?.text = "${NavigationManager.distanceText} • ${NavigationManager.destinationText}"
                     } else if (IslandTimerManager.currentMode != IslandTimerManager.Mode.NONE) {
@@ -2363,6 +2389,9 @@ object IslandOverlayManager {
                         callControlsRow?.visibility = View.GONE
                         quickReplyRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.GONE
+
+                        expandedArtwork?.setPadding(0, 0, 0, 0)
+                        expandedArtwork?.setBackgroundResource(R.drawable.bg_nothing_card)
 
                         expandedAppIcon?.setImageResource(R.drawable.ic_timer)
                         expandedArtwork?.setImageResource(R.drawable.ic_timer)
@@ -2398,6 +2427,9 @@ object IslandOverlayManager {
                         timerControlsRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.VISIBLE
 
+                        expandedArtwork?.setPadding(0, 0, 0, 0)
+                        expandedArtwork?.setBackgroundResource(R.drawable.bg_nothing_card)
+
                         if (activeNotificationIcon != null) {
                             expandedAppIcon?.setImageDrawable(activeNotificationIcon)
                             expandedArtwork?.setImageDrawable(activeNotificationIcon)
@@ -2406,7 +2438,8 @@ object IslandOverlayManager {
                             expandedAppIcon?.setImageResource(R.drawable.ic_bell)
                             expandedArtwork?.visibility = View.GONE
                         }
-                        expandedSourceAppText?.text = "${activeNotificationAppName.uppercase()} // NOTIFICATION"
+                        val notifApp = activeNotificationAppName.ifEmpty { "NOTIFICATION" }.uppercase()
+                        expandedSourceAppText?.text = "$notifApp • NOTIFICATION"
                         expandedTitleText?.text = activeNotificationTitle.ifEmpty { activeNotificationAppName }
                         expandedArtistText?.text = "Tap to open ${activeNotificationAppName.ifEmpty { "App" }}"
                         expandedNotificationBody?.text = if (activeNotificationContent.isNotEmpty()) activeNotificationContent else activeNotificationTitle
@@ -2439,6 +2472,10 @@ object IslandOverlayManager {
                         expandedNotificationBody?.visibility = View.GONE
                         btnPlayPause?.setImageResource(R.drawable.ic_pause)
                         expandedEqualizer?.isPlaying = true
+
+                        expandedArtwork?.setPadding(0, 0, 0, 0)
+                        expandedArtwork?.setBackgroundResource(R.drawable.bg_nothing_card)
+
                         if (currentArtwork != null) {
                             expandedArtwork?.setImageBitmap(currentArtwork)
                         } else if (currentAppIcon != null) {
@@ -2461,6 +2498,10 @@ object IslandOverlayManager {
                         expandedNotificationBody?.visibility = View.GONE
                         btnPlayPause?.setImageResource(R.drawable.ic_play)
                         expandedEqualizer?.isPlaying = false
+
+                        expandedArtwork?.setPadding(0, 0, 0, 0)
+                        expandedArtwork?.setBackgroundResource(R.drawable.bg_nothing_card)
+
                         if (currentArtwork != null) {
                             expandedArtwork?.setImageBitmap(currentArtwork)
                         } else if (currentAppIcon != null) {
@@ -2476,10 +2517,14 @@ object IslandOverlayManager {
                         quickReplyRow?.visibility = View.GONE
                         notificationActionsScroll?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.VISIBLE
+
+                        expandedArtwork?.setPadding(0, 0, 0, 0)
+                        expandedArtwork?.setBackgroundResource(R.drawable.bg_nothing_card)
+
                         expandedAppIcon?.setImageResource(R.drawable.ic_bolt)
                         expandedArtwork?.setImageResource(R.drawable.ic_bolt)
                         expandedArtwork?.visibility = View.VISIBLE
-                        expandedSourceAppText?.text = "FAST CHARGING // GLYPH"
+                        expandedSourceAppText?.text = "FAST CHARGING • GLYPH"
                         expandedTitleText?.text = "BATTERY CHARGING"
                         expandedArtistText?.text = "$currentBatteryPercent% • Connected to Power"
                         expandedNotificationBody?.text = "$currentBatteryPercent% • Connected to Power"
@@ -2492,7 +2537,8 @@ object IslandOverlayManager {
                             expandedArtwork?.setImageResource(R.drawable.ic_cricket)
                         }
                         expandedArtwork?.visibility = View.VISIBLE
-                        expandedSourceAppText?.text = "LIVE CRICKET // ${currentCricketAppName.uppercase()}"
+                        val cricketSource = currentCricketAppName.ifEmpty { "CRICKET" }.uppercase()
+        expandedSourceAppText?.text = "$cricketSource • LIVE MATCH"
                         expandedTitleText?.text = currentCricketMatch
                         expandedArtistText?.text = currentCricketScore
                         expandedNotificationBody?.text = "$currentCricketMatch\n$currentCricketScore"
