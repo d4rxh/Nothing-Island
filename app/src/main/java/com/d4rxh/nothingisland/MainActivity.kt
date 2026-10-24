@@ -54,6 +54,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var badgeOverlayPermission: TextView
     private lateinit var cardNotificationPermission: LinearLayout
     private lateinit var badgeNotificationPermission: TextView
+    private lateinit var cardAccessibilityPermission: LinearLayout
+    private lateinit var badgeAccessibilityPermission: TextView
 
     // Presets & Calibration Sliders
     private lateinit var btnResetDefaults: Button
@@ -135,6 +137,8 @@ class MainActivity : AppCompatActivity() {
         badgeOverlayPermission = findViewById(R.id.badgeOverlayPermission)
         cardNotificationPermission = findViewById(R.id.cardNotificationPermission)
         badgeNotificationPermission = findViewById(R.id.badgeNotificationPermission)
+        cardAccessibilityPermission = findViewById(R.id.cardAccessibilityPermission)
+        badgeAccessibilityPermission = findViewById(R.id.badgeAccessibilityPermission)
 
         btnResetDefaults = findViewById(R.id.btnResetDefaults)
         btnPresetPhone2 = findViewById(R.id.btnPresetPhone2)
@@ -201,6 +205,11 @@ class MainActivity : AppCompatActivity() {
         cardNotificationPermission.setOnClickListener {
             NothingHapticHelper.vibrateTick(it)
             requestNotificationPermission()
+        }
+
+        cardAccessibilityPermission.setOnClickListener {
+            NothingHapticHelper.vibrateTick(it)
+            requestAccessibilityPermission()
         }
 
         // Test Buttons
@@ -461,8 +470,34 @@ class MainActivity : AppCompatActivity() {
             badgeNotificationPermission.setTextColor(
                 if (hasNotification) Color.parseColor("#4CAF50") else Color.parseColor("#D71920")
             )
+
+            val hasA11y = isAccessibilityServiceEnabled()
+            badgeAccessibilityPermission.text = if (hasA11y) "ACTIVE" else "ENABLE"
+            badgeAccessibilityPermission.setTextColor(
+                if (hasA11y) Color.parseColor("#4CAF50") else Color.parseColor("#D71920")
+            )
         } catch (e: Exception) {
             Log.e("MainActivity", "Error checking permissions: ${e.message}")
+        }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        return try {
+            val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as? android.view.accessibility.AccessibilityManager
+            val enabledServices = am?.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            enabledServices?.any { it.resolveInfo.serviceInfo.packageName == packageName } == true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun requestAccessibilityPermission() {
+        try {
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            startActivity(intent)
+            Toast.makeText(this, "Find '(NOT) ISLAND' in Downloaded Apps and turn it ON for lock screen display", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Open Settings -> Accessibility -> (NOT) Island", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -538,8 +573,7 @@ class MainActivity : AppCompatActivity() {
         simLeftIcon.setImageResource(R.drawable.ic_music)
         simLeftIcon.visibility = View.VISIBLE
         simLeftText.visibility = View.GONE
-        simRightText.text = "Starboy"
-        simRightText.visibility = View.VISIBLE
+        simRightText.visibility = View.GONE
         simEqualizer.visibility = View.VISIBLE
         simEqualizer.isPlaying = true
 

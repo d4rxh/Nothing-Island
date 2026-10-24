@@ -1,15 +1,12 @@
 package com.d4rxh.nothingisland.service
 
-import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
@@ -19,39 +16,11 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.d4rxh.nothingisland.MainActivity
 import com.d4rxh.nothingisland.R
-import com.d4rxh.nothingisland.ui.LockscreenOverlayActivity
 
 class IslandOverlayService : Service() {
 
     private val CHANNEL_ID = "nothing_island_service_channel"
     private val NOTIFICATION_ID = 1001
-
-    private val lockscreenReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            when (intent.action) {
-                Intent.ACTION_SCREEN_ON -> {
-                    try {
-                        val km = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-                        if (km.isKeyguardLocked) {
-                            val lockIntent = Intent(context, LockscreenOverlayActivity::class.java).apply {
-                                addFlags(
-                                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                                    Intent.FLAG_ACTIVITY_NO_ANIMATION
-                                )
-                            }
-                            context.startActivity(lockIntent)
-                        }
-                    } catch (e: Exception) {
-                        Log.e("IslandOverlayService", "Error launching lockscreen overlay: ${e.message}")
-                    }
-                }
-                Intent.ACTION_SCREEN_OFF, Intent.ACTION_USER_PRESENT -> {
-                    LockscreenOverlayActivity.dismiss()
-                }
-            }
-        }
-    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -60,14 +29,6 @@ class IslandOverlayService : Service() {
         instance = this
         startForegroundSafely()
         IslandOverlayManager.showOverlay(this)
-
-        // Register lockscreen observer
-        val filter = IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_SCREEN_OFF)
-            addAction(Intent.ACTION_USER_PRESENT)
-        }
-        registerReceiver(lockscreenReceiver, filter)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -175,11 +136,6 @@ class IslandOverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        try {
-            unregisterReceiver(lockscreenReceiver)
-        } catch (e: Exception) {
-            // Ignore
-        }
         instance = null
     }
 

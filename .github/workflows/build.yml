@@ -39,34 +39,31 @@ jobs:
       - name: Prepare APK for Artifact & Release
         run: |
           mkdir -p build-output
-          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.8.apk
+          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.9.apk
           ls -la build-output/
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Nothing-Island-v1.0.8
-          path: build-output/Nothing-Island-v1.0.8.apk
+          name: Nothing-Island-v1.0.9
+          path: build-output/Nothing-Island-v1.0.9.apk
           retention-days: 14
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Nothing Island v1.0.8 (Interactive Touch, Cricket Live Scores, Attached-to-Top Notch & Auto-Dismiss Notifications)
+          name: Nothing Island v1.0.9 (Zero Music Size Jumps, Custom Touch Interception, and Native Lock Screen A11y)
           tag_name: ${{ github.ref_name }}
-          files: build-output/Nothing-Island-v1.0.8.apk
+          files: build-output/Nothing-Island-v1.0.9.apk
           draft: false
           prerelease: false
           body: |
-            ## 🔴 (NOT) ISLAND v1.0.8 // 100% Interactive Touch, Live Cricket Scores & Zero Size Jumps
+            ## 🔴 (NOT) ISLAND v1.0.9 // Fixed Music Size, 100% Touch Interception & Native Lock Screen
 
-            ### What's Fixed & Added:
-            - **Guaranteed Interactive Touch (Tap to Expand)**: Top-edge status-bar gesture conflicts resolved with touch delta tracking. Tapping the island now 100% reliably expands the Nothing OS brutalist media controller card.
-            - **Rock-Solid Music Layout (Zero Size Jumps)**: Island width is locked at a stable 215dp during playback with continuous marquee track titles. Album art / Spotify icons are locked inside a strict 24x24dp rounded container so they never warp or shrink.
-            - **Auto-Dismiss Notifications & Music Restore**: Incoming chat notifications show for 4 seconds and automatically restore your track title, album art, and live dot-matrix equalizer without requiring manual dismissal.
-            - **Live Cricket / Sports Score Support**: Live ongoing scores from Cricbuzz, Google Sports, Hotstar, JioCinema, FanCode, ESPNcricinfo, and CREX are now tracked and displayed in the Dynamic Island with real-time score updates.
-            - **Apple-Style "Attach To Top Bezel" (Chipka Hua) Mode**: Toggle to mount the island flush with the top physical bezel (`y = 0`, flat top corners, rounded bottom corners).
-            - **Lock Screen Visibility**: Dynamic Island remains 100% active and interactive over the Lock Screen.
+            ### What's Fixed:
+            - **No More Music Size Jumps (Stays Compact)**: Music mode now maintains the exact user-configured island width (e.g. 110dp). In compact mode it shows only Album Art on the left and the Dancing Red Dot-Matrix Equalizer on the right. Tapping expands into the full 290dp media controller card.
+            - **Notification Bar Gesture Stealing Fixed**: Custom `IslandRootLayout` uses `requestDisallowInterceptTouchEvent(true)` and `onInterceptTouchEvent()` to claim status-bar edge taps, preventing the Android notification shade from stealing clicks.
+            - **Lock Screen Activity Removed & Native Accessibility Overlay Added**: Removed the problematic Lockscreen Activity that was blocking PIN/fingerprint unlock and back gestures. Integrated native Accessibility Service overlay (`TYPE_ACCESSIBILITY_OVERLAY`) allowing dynamic island on lock screen safely without ever interfering with unlock gestures.
 
             ### 📦 Direct APK Download
-            **[Nothing-Island-v1.0.8.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.8/Nothing-Island-v1.0.8.apk)**
+            **[Nothing-Island-v1.0.9.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.9/Nothing-Island-v1.0.9.apk)**

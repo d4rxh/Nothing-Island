@@ -30,18 +30,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Lockscreen Overlay Activity (Guarantees Dynamic Island is 100% visible when device is locked) -->
-        <activity
-            android:name=".ui.LockscreenOverlayActivity"
-            android:exported="false"
-            android:theme="@style/Theme.NothingIsland.Lockscreen"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true"
-            android:inheritShowWhenLocked="true"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:launchMode="singleInstance" />
-
         <!-- Floating Overlay Island Service (Android 14/15 Compliant 24/7 Foreground Service) -->
         <service
             android:name=".service.IslandOverlayService"
@@ -51,6 +39,19 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Floating camera punch-hole dynamic island status overlay" />
+        </service>
+
+        <!-- Accessibility Service (Allows 100% native Lock Screen display without blocking unlock or back gesture) -->
+        <service
+            android:name=".service.NothingIslandAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
         </service>
 
         <!-- Notification & Media Session Listener -->

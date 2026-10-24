@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
+<com.d4rxh.nothingisland.ui.IslandRootLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/islandRoot"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content">
@@ -16,18 +15,14 @@
         android:clipToOutline="true"
         android:clipToPadding="false"
         android:elevation="12dp"
-        android:focusable="false"
-        android:clickable="true"
         android:gravity="center_vertical"
         android:orientation="vertical">
 
-        <!-- 1. Compact Header Bar (Shown in compact states: Idle / Music / Charging / Notification / Cricket) -->
+        <!-- 1. Compact Header Bar (Idle / Music / Charging / Notification / Cricket) -->
         <LinearLayout
             android:id="@+id/compactContainer"
             android:layout_width="wrap_content"
             android:layout_height="38dp"
-            android:clickable="true"
-            android:focusable="false"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="10dp"
@@ -47,7 +42,7 @@
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:scaleType="centerCrop"
-                    android:src="@drawable/ic_music" />
+                    android:src="@drawable/ic_dot" />
             </FrameLayout>
 
             <!-- Compact Left Text (e.g. Charging % or App Name) -->
@@ -62,13 +57,13 @@
                 android:textStyle="bold"
                 android:visibility="gone" />
 
-            <!-- Center Cutout Spacer (Hugs phone's front camera) -->
+            <!-- Center Cutout Spacer (Hugs phone's front camera punch-hole) -->
             <View
                 android:id="@+id/centerCutoutSpacer"
                 android:layout_width="28dp"
                 android:layout_height="28dp" />
 
-            <!-- Compact Right Section (Title / Battery / Cricket Score + Equalizer) -->
+            <!-- Compact Right Section (Title / Battery / Cricket Score / Equalizer) -->
             <LinearLayout
                 android:id="@+id/compactRightContainer"
                 android:layout_width="wrap_content"
@@ -81,13 +76,11 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="4dp"
-                    android:layout_marginEnd="6dp"
+                    android:layout_marginEnd="4dp"
                     android:ellipsize="marquee"
-                    android:fadingEdge="horizontal"
-                    android:fadingEdgeLength="8dp"
                     android:letterSpacing="0.08"
                     android:marqueeRepeatLimit="marquee_forever"
-                    android:maxWidth="110dp"
+                    android:maxWidth="80dp"
                     android:singleLine="true"
                     android:textColor="@color/nothing_white"
                     android:textSize="11sp"
@@ -258,4 +251,4 @@
 
     </LinearLayout>
 
-</FrameLayout>
+</com.d4rxh.nothingisland.ui.IslandRootLayout>
