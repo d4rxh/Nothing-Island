@@ -973,6 +973,7 @@ object IslandOverlayManager {
 
     private fun populateNotificationActions(context: Context, actions: Array<Notification.Action>) {
         val container = notificationActionsContainer ?: return
+        val prefs = IslandPreferences(context)
         container.removeAllViews()
 
         for (action in actions) {
