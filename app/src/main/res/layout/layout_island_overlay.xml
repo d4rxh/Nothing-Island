@@ -208,6 +208,47 @@
                         android:layout_marginStart="8dp" />
                 </LinearLayout>
 
+                <!-- Interactive Media Seekbar Row (dynamicSpot style) -->
+                <LinearLayout
+                    android:id="@+id/mediaSeekBarRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/textTrackElapsed"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/ndot"
+                        android:text="00:00"
+                        android:textColor="@color/nothing_text_secondary"
+                        android:textSize="10sp" />
+
+                    <SeekBar
+                        android:id="@+id/mediaSeekBar"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:maxHeight="3dp"
+                        android:progressDrawable="@drawable/bg_seekbar_progress"
+                        android:thumb="@drawable/bg_seekbar_thumb"
+                        android:splitTrack="false" />
+
+                    <TextView
+                        android:id="@+id/textTrackDuration"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/ndot"
+                        android:text="00:00"
+                        android:textColor="@color/nothing_text_secondary"
+                        android:textSize="10sp" />
+                </LinearLayout>
+
                 <!-- Media Playback Control Row -->
                 <LinearLayout
                     android:id="@+id/mediaControlsRow"
@@ -257,6 +298,24 @@
                     android:textColor="@color/nothing_white"
                     android:textSize="13sp"
                     android:visibility="gone" />
+
+                <!-- Dynamic Notification Actions (dynamicSpot style - WhatsApp, Telegram, Gmail actions) -->
+                <HorizontalScrollView
+                    android:id="@+id/notificationActionsScroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:overScrollMode="never"
+                    android:scrollbars="none"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:id="@+id/notificationActionsContainer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
 
                 <!-- Call Controls Row (Incoming / Active Call) -->
                 <LinearLayout

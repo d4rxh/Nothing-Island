@@ -443,7 +443,8 @@ class IslandNotificationListener : NotificationListenerService() {
                     packageName = sbn.packageName,
                     contentIntent = contentIntent,
                     remoteInput = quickReplyRemoteInput,
-                    replyIntent = quickReplyPendingIntent
+                    replyIntent = quickReplyPendingIntent,
+                    actions = actions
                 )
             }
         } catch (e: Exception) {

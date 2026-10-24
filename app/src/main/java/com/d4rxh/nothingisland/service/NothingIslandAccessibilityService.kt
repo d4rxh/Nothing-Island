@@ -14,7 +14,15 @@ class NothingIslandAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // No event interception needed - we only use the overlay window capability
+        if (event == null) return
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString() ?: return
+            val prefs = com.d4rxh.nothingisland.data.IslandPreferences(this)
+            if (prefs.isBlacklistEnabled) {
+                val isBlacklisted = prefs.blacklistedPackages.contains(pkg)
+                IslandOverlayManager.setTemporarilyHiddenByApp(isBlacklisted)
+            }
+        }
     }
 
     override fun onInterrupt() {

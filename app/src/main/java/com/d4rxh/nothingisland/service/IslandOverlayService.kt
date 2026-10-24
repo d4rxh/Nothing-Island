@@ -23,6 +23,8 @@ class IslandOverlayService : Service() {
     private val NOTIFICATION_ID = 1001
 
     private var telephonyReceiver: android.content.BroadcastReceiver? = null
+    private var volumeObserver: android.database.ContentObserver? = null
+    private var lastVolume: Int = -1
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -32,7 +34,41 @@ class IslandOverlayService : Service() {
         startForegroundSafely()
         IslandOverlayManager.registerBatteryReceiver(this)
         registerTelephonyReceiver()
+        registerVolumeObserver()
         IslandOverlayManager.showOverlay(this)
+    }
+
+    private fun registerVolumeObserver() {
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager ?: return
+            val maxVol = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+            lastVolume = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+
+            volumeObserver = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    super.onChange(selfChange)
+                    val prefs = com.d4rxh.nothingisland.data.IslandPreferences(this@IslandOverlayService)
+                    if (!prefs.volumeHudEnabled) return
+
+                    val currentVol = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                    if (currentVol != lastVolume) {
+                        lastVolume = currentVol
+                        val percent = if (maxVol > 0) (currentVol * 100) / maxVol else 0
+                        val isMuted = currentVol == 0
+                        IslandOverlayManager.onVolumeChanged(percent, isMuted)
+                    }
+                }
+            }
+
+            contentResolver.registerContentObserver(
+                android.provider.Settings.System.CONTENT_URI,
+                true,
+                volumeObserver!!
+            )
+            Log.i("IslandOverlayService", "Volume observer registered successfully")
+        } catch (e: Exception) {
+            Log.w("IslandOverlayService", "Could not register volume observer: ${e.message}")
+        }
     }
 
     private fun registerTelephonyReceiver() {
@@ -182,6 +218,11 @@ class IslandOverlayService : Service() {
         super.onDestroy()
         try {
             telephonyReceiver?.let { unregisterReceiver(it) }
+        } catch (e: Exception) {
+            // Ignore
+        }
+        try {
+            volumeObserver?.let { contentResolver.unregisterContentObserver(it) }
         } catch (e: Exception) {
             // Ignore
         }

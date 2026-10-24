@@ -7,7 +7,7 @@ A minimal, system-wide dynamic overlay engineered for Nothing OS and modern Andr
 </p>
 
 <p align="center">
-  <a href="https://github.com/d4rxh/Nothing-Island/releases"><img src="https://img.shields.io/github/v/release/d4rxh/Nothing-Island?style=flat-square&color=D71920&label=Release%20v1.0.17" alt="Release"/></a>
+  <a href="https://github.com/d4rxh/Nothing-Island/releases"><img src="https://img.shields.io/github/v/release/d4rxh/Nothing-Island?style=flat-square&color=D71920&label=Release%20v1.0.18" alt="Release"/></a>
   <img src="https://img.shields.io/badge/License-MIT-black?style=flat-square" alt="MIT License"/>
   <img src="https://img.shields.io/badge/Android-8.0%20--%2015+-black?style=flat-square" alt="Android Support"/>
   <img src="https://img.shields.io/badge/Privacy-100%25%20On--Device-green?style=flat-square" alt="100% On-Device"/>
@@ -30,21 +30,37 @@ Designed around Nothing OS principles:
 
 ## Features
 
-### Media Controls & Visualizer
+### Media Controls, Interactive Seekbar & Visualizer
 - Shows current song title, artist, and album art from any media player (Spotify, YouTube, Apple Music, SoundCloud).
 - Real-time 4-column red LED equalizer visualizer during active playback.
+- **Interactive Touch Seekbar**: Touchable track scrubber with elapsed duration (`01:23`) and total length (`03:45`) — drag or tap to seek immediately.
 - Expanding card exposes full media controls: previous, play/pause, next, and progress.
 - Dismissing or closing the media player clears the island immediately.
+
+### Dynamic Notification Actions & Inline Quick Reply
+- Message preview for incoming notifications (WhatsApp, Telegram, SMS, Gmail).
+- **Dynamic Action Pills**: Surfaces native notification actions (e.g. *Mark as Read*, *Archive*, *Reply*) as sleek, interactive Nothing-styled pills with haptic feedback.
+- Inline reply text box inside the expanded island card, allowing direct replies without leaving the current app.
+
+### Dynamic Volume HUD Pill
+- Sleek, unobtrusive volume indicator pill that pops up instantly when hardware volume keys are pressed and smoothly fades away.
+
+### App Blacklist / Game Mode
+- Auto-hides the dynamic overlay in selected apps (Camera, YouTube, BGMI, Free Fire) to prevent screen obstruction during gameplay or media consumption.
+
+### Battery & Charging Alerts
+- Real-time charging status and battery percentage indicator upon plugging in.
+- **Battery Alerts**: Dedicated heads-up alerts when battery reaches 100% full charge or drops below 15% low battery.
+
+### Live Second-by-Second Timer & Stopwatch
+- Embedded stopwatch with lap timing and live second-by-second ticker.
+- Countdown timer with real-time remaining countdown display.
+- Accurate timekeeping backed by system monotonic clocks, maintaining consistency across screen off and process recreation.
 
 ### Incoming & Ongoing Calls
 - Displays incoming and active phone calls with caller name and number.
 - Ongoing duration timer counter.
 - One-tap Answer and Decline actions.
-
-### Built-in Timer & Stopwatch
-- Embedded stopwatch with lap timing.
-- Countdown timer with real-time remaining display.
-- Accurate timekeeping backed by system monotonic clocks, maintaining consistency across screen off and process recreation.
 
 ### Turn-by-Turn Navigation
 - Compact turn direction indicator, maneuver instructions, and distance to next turn when navigation is active (Google Maps).
@@ -58,17 +74,8 @@ Designed around Nothing OS principles:
 - Directly detects and surfaces ongoing recordings from Nothing Sound Recorder, Google Recorder, and voice recorder apps with a pulsing red LED indicator and live duration.
 - Automatically mirrors Google Clock, Nothing Clock, and system stopwatch/timer alerts.
 
-### Device & Connectivity Events
-- Real-time charging status and battery percentage indicator upon plugging in.
-- Bluetooth device connection and disconnection alerts.
-- Headset plug/unplug events.
-- Ringer mode changes (Silent, Vibrate, Normal).
-
-### Inline Quick Reply
-- Message preview for incoming notifications (WhatsApp, Telegram, SMS, Signal).
-- Inline reply text box inside the expanded island card, allowing direct replies without leaving the current app.
-
 ### Hardware Notch Alignment & Bezel Integration
+- **Camera Cutout Presets**: Support for Top-Left punch-holes (Nothing Phone 1), Top-Center punch-holes (Nothing Phone 2/2a), and Top-Right cutouts.
 - **Attach to Top Bezel**: Mounts flush against the top display border with zero gap or shadow halo, creating an integrated notch aesthetic.
 - **Landscape Notch Anchoring**: During landscape gaming or fullscreen video, the island dynamically anchors around the physical camera hole along the short edge, keeping in-game controls and HUDs unobstructed.
 

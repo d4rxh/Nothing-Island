@@ -83,6 +83,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var switchChargingIsland: MaterialSwitch
     private lateinit var switchNotificationIsland: MaterialSwitch
     private lateinit var switchHaptics: MaterialSwitch
+    private lateinit var switchMediaSeekbar: MaterialSwitch
+    private lateinit var switchVolumeHud: MaterialSwitch
+    private lateinit var switchBlacklist: MaterialSwitch
+    private lateinit var switchBatteryAlerts: MaterialSwitch
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -165,6 +169,10 @@ class MainActivity : AppCompatActivity() {
         switchChargingIsland = findViewById(R.id.switchChargingIsland)
         switchNotificationIsland = findViewById(R.id.switchNotificationIsland)
         switchHaptics = findViewById(R.id.switchHaptics)
+        switchMediaSeekbar = findViewById(R.id.switchMediaSeekbar)
+        switchVolumeHud = findViewById(R.id.switchVolumeHud)
+        switchBlacklist = findViewById(R.id.switchBlacklist)
+        switchBatteryAlerts = findViewById(R.id.switchBatteryAlerts)
     }
 
     private fun setupTypography() {
@@ -249,18 +257,21 @@ class MainActivity : AppCompatActivity() {
         // Presets
         btnPresetPhone2.setOnClickListener {
             NothingHapticHelper.vibratePop(this)
+            prefs.notchAlignment = IslandPreferences.ALIGNMENT_CENTER
             applyPreset(x = 0, y = 14, width = 110, height = 36, radius = 20, cutout = 28)
-            Toast.makeText(this, "Preset applied: Nothing Phone (2/2a)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Preset applied: Nothing Phone (2/2a) [Center]", Toast.LENGTH_SHORT).show()
         }
 
         btnPresetPhone1.setOnClickListener {
             NothingHapticHelper.vibratePop(this)
+            prefs.notchAlignment = IslandPreferences.ALIGNMENT_LEFT
             applyPreset(x = -75, y = 14, width = 110, height = 36, radius = 20, cutout = 28)
-            Toast.makeText(this, "Preset applied: Nothing Phone (1)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Preset applied: Nothing Phone (1) [Left]", Toast.LENGTH_SHORT).show()
         }
 
         btnResetDefaults.setOnClickListener {
             NothingHapticHelper.vibrateTick(it)
+            prefs.notchAlignment = IslandPreferences.ALIGNMENT_CENTER
             applyPreset(x = 0, y = 14, width = 110, height = 36, radius = 20, cutout = 28)
             Toast.makeText(this, "Reset to factory defaults", Toast.LENGTH_SHORT).show()
         }
@@ -341,6 +352,22 @@ class MainActivity : AppCompatActivity() {
 
         switchHaptics.setOnCheckedChangeListener { _, isChecked ->
             prefs.hapticsEnabled = isChecked
+        }
+
+        switchMediaSeekbar.setOnCheckedChangeListener { _, isChecked ->
+            prefs.mediaSeekbarEnabled = isChecked
+        }
+
+        switchVolumeHud.setOnCheckedChangeListener { _, isChecked ->
+            prefs.volumeHudEnabled = isChecked
+        }
+
+        switchBlacklist.setOnCheckedChangeListener { _, isChecked ->
+            prefs.isBlacklistEnabled = isChecked
+        }
+
+        switchBatteryAlerts.setOnCheckedChangeListener { _, isChecked ->
+            prefs.batteryAlertsEnabled = isChecked
         }
     }
 
@@ -457,6 +484,10 @@ class MainActivity : AppCompatActivity() {
         switchChargingIsland.isChecked = prefs.chargingIslandEnabled
         switchNotificationIsland.isChecked = prefs.notificationIslandEnabled
         switchHaptics.isChecked = prefs.hapticsEnabled
+        switchMediaSeekbar.isChecked = prefs.mediaSeekbarEnabled
+        switchVolumeHud.isChecked = prefs.volumeHudEnabled
+        switchBlacklist.isChecked = prefs.isBlacklistEnabled
+        switchBatteryAlerts.isChecked = prefs.batteryAlertsEnabled
     }
 
     private fun updatePermissionBadges() {

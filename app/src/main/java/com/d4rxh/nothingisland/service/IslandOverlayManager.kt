@@ -2,6 +2,7 @@ package com.d4rxh.nothingisland.service
 
 import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.PendingIntent
 import android.app.RemoteInput
 import android.content.BroadcastReceiver
@@ -33,9 +34,11 @@ import android.view.WindowManager
 import android.view.animation.OvershootInterpolator
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import com.d4rxh.nothingisland.R
 import com.d4rxh.nothingisland.data.IslandPreferences
@@ -82,10 +85,25 @@ object IslandOverlayManager {
     private var expandedArtistText: TextView? = null
     private var expandedEqualizer: DotMatrixEqualizerView? = null
     private var mediaControlsRow: LinearLayout? = null
+    private var mediaSeekBarRow: LinearLayout? = null
+    private var mediaSeekBar: SeekBar? = null
+    private var textTrackElapsed: TextView? = null
+    private var textTrackDuration: TextView? = null
     private var btnPrev: ImageButton? = null
     private var btnPlayPause: ImageButton? = null
     private var btnNext: ImageButton? = null
     private var expandedNotificationBody: TextView? = null
+    private var notificationActionsScroll: HorizontalScrollView? = null
+    private var notificationActionsContainer: LinearLayout? = null
+
+    // dynamicSpot runtime state
+    private var musicProgressRunnable: Runnable? = null
+    private var isUserSeeking: Boolean = false
+    private var activeNotificationActions: Array<Notification.Action>? = null
+    private var isHiddenByBlacklistedApp: Boolean = false
+    private var clockTickerRunnable: Runnable? = null
+    private var liveClockSeconds: Long = 0L
+    private var volumeDismissRunnable: Runnable? = null
 
     // Call Controls Row
     private var callControlsRow: LinearLayout? = null
@@ -351,9 +369,14 @@ object IslandOverlayManager {
                 }
             }
         } else {
-            // Standard portrait: camera notch on TOP CENTER
-            params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            // Pure center alignment (offset only by user setting prefs.xOffset)
+            // Standard portrait: camera notch alignment (Left Phone 1, Center Phone 2/2a, Right)
+            val alignGravity = when (prefs.notchAlignment) {
+                IslandPreferences.ALIGNMENT_LEFT -> Gravity.TOP or Gravity.START
+                IslandPreferences.ALIGNMENT_RIGHT -> Gravity.TOP or Gravity.END
+                else -> Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            }
+            params.gravity = alignGravity
+            // Pure center/edge alignment (offset by user setting prefs.xOffset)
             params.x = targetX
             params.y = if (prefs.attachToTop) -dpToPx(context, 3) else if (bounds != null && bounds.isNotEmpty()) bounds[0].top else targetY
 
@@ -533,10 +556,16 @@ object IslandOverlayManager {
         expandedArtistText = view.findViewById(R.id.expandedArtistText)
         expandedEqualizer = view.findViewById(R.id.expandedEqualizer)
         mediaControlsRow = view.findViewById(R.id.mediaControlsRow)
+        mediaSeekBarRow = view.findViewById(R.id.mediaSeekBarRow)
+        mediaSeekBar = view.findViewById(R.id.mediaSeekBar)
+        textTrackElapsed = view.findViewById(R.id.textTrackElapsed)
+        textTrackDuration = view.findViewById(R.id.textTrackDuration)
         btnPrev = view.findViewById(R.id.btnPrev)
         btnPlayPause = view.findViewById(R.id.btnPlayPause)
         btnNext = view.findViewById(R.id.btnNext)
         expandedNotificationBody = view.findViewById(R.id.expandedNotificationBody)
+        notificationActionsScroll = view.findViewById(R.id.notificationActionsScroll)
+        notificationActionsContainer = view.findViewById(R.id.notificationActionsContainer)
 
         callControlsRow = view.findViewById(R.id.callControlsRow)
         btnDeclineCall = view.findViewById(R.id.btnDeclineCall)
@@ -782,6 +811,26 @@ object IslandOverlayManager {
             IslandMediaManager.skipNext()
         }
 
+        // Interactive Media Seekbar (dynamicSpot touch seekbar)
+        mediaSeekBar?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    textTrackElapsed?.text = formatDuration(progress.toLong())
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                isUserSeeking = true
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                isUserSeeking = false
+                val newPos = seekBar?.progress?.toLong() ?: return
+                IslandMediaManager.seekTo(newPos)
+                if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(context)
+            }
+        })
+
         // Horizontal swipe to switch active events (or collapse)
         islandRoot?.onIslandSwipeNext = {
             if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(context)
@@ -888,6 +937,151 @@ object IslandOverlayManager {
         }
     }
 
+    private fun formatDuration(ms: Long): String {
+        val totalSeconds = (ms / 1000).coerceAtLeast(0)
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return String.format("%02d:%02d", minutes, seconds)
+    }
+
+    private fun startMusicProgressTracking() {
+        stopMusicProgressTracking()
+        musicProgressRunnable = object : Runnable {
+            override fun run() {
+                if (currentState == State.EXPANDED && (isMusicPlaying || currentTrackTitle.isNotEmpty())) {
+                    val duration = IslandMediaManager.getDurationMs()
+                    val position = IslandMediaManager.getPositionMs()
+                    if (duration > 0) {
+                        mediaSeekBar?.max = duration.toInt()
+                        if (!isUserSeeking) {
+                            mediaSeekBar?.progress = position.toInt()
+                            textTrackElapsed?.text = formatDuration(position)
+                        }
+                        textTrackDuration?.text = formatDuration(duration)
+                    }
+                    mainHandler.postDelayed(this, 500)
+                }
+            }
+        }
+        mainHandler.post(musicProgressRunnable!!)
+    }
+
+    private fun stopMusicProgressTracking() {
+        musicProgressRunnable?.let { mainHandler.removeCallbacks(it) }
+        musicProgressRunnable = null
+    }
+
+    private fun populateNotificationActions(context: Context, actions: Array<Notification.Action>) {
+        val container = notificationActionsContainer ?: return
+        container.removeAllViews()
+
+        for (action in actions) {
+            val title = action.title?.toString()?.trim() ?: continue
+            if (title.isEmpty()) continue
+
+            val actionBtn = TextView(context).apply {
+                text = title.uppercase()
+                setTextColor(Color.WHITE)
+                textSize = 10f
+                typeface = TypefaceHelper.getNdotTypeface(context)
+                setBackgroundResource(R.drawable.bg_action_pill)
+                val padH = dpToPx(context, 12)
+                val padV = dpToPx(context, 6)
+                setPadding(padH, padV, padH, padV)
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    marginEnd = dpToPx(context, 8)
+                }
+                layoutParams = lp
+
+                setOnClickListener {
+                    NothingHapticHelper.triggerMedium(context)
+                    val rInputs = action.remoteInputs
+                    if (rInputs != null && rInputs.isNotEmpty()) {
+                        activeRemoteInput = rInputs[0]
+                        activeReplyIntent = action.actionIntent
+                        quickReplyRow?.visibility = View.VISIBLE
+                        replyEditText?.requestFocus()
+                        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager
+                        imm?.showSoftInput(replyEditText, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                    } else {
+                        try {
+                            action.actionIntent?.send()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error executing action: ${e.message}")
+                        }
+                        collapseIsland()
+                    }
+                }
+            }
+            container.addView(actionBtn)
+        }
+    }
+
+    fun setTemporarilyHiddenByApp(hidden: Boolean) {
+        if (isHiddenByBlacklistedApp == hidden) return
+        isHiddenByBlacklistedApp = hidden
+        mainHandler.post {
+            overlayView?.visibility = if (hidden) View.GONE else View.VISIBLE
+        }
+    }
+
+    fun onVolumeChanged(volumePercent: Int, isMuted: Boolean) {
+        val context = appContext ?: return
+        val prefs = IslandPreferences(context)
+        if (!prefs.volumeHudEnabled) return
+
+        mainHandler.post {
+            volumeDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+
+            compactLeftIcon?.setImageResource(if (isMuted) R.drawable.ic_volume_mute else R.drawable.ic_volume)
+            compactLeftIcon?.setColorFilter(Color.WHITE)
+            compactLeftIcon?.visibility = View.VISIBLE
+            compactLeftText?.visibility = View.GONE
+            centerCutoutSpacer?.visibility = View.VISIBLE
+
+            compactRightText?.text = if (isMuted) "MUTED" else "VOL $volumePercent%"
+            compactRightText?.setTextColor(Color.WHITE)
+            compactRightText?.visibility = View.VISIBLE
+            compactEqualizer?.visibility = View.GONE
+
+            updateState(State.DEVICE_EVENT_COMPACT)
+
+            volumeDismissRunnable = Runnable {
+                if (currentState == State.DEVICE_EVENT_COMPACT) {
+                    restorePreviousMediaOrIdle()
+                }
+            }
+            mainHandler.postDelayed(volumeDismissRunnable!!, 1800)
+        }
+    }
+
+    private fun startClockTicker(initialSeconds: Long, isCountdown: Boolean) {
+        stopClockTicker()
+        liveClockSeconds = initialSeconds
+        clockTickerRunnable = object : Runnable {
+            override fun run() {
+                if (currentState == State.TIMER_COMPACT && isExternalClockActive) {
+                    if (isCountdown) {
+                        if (liveClockSeconds > 0) liveClockSeconds--
+                    } else {
+                        liveClockSeconds++
+                    }
+                    compactRightText?.text = formatDuration(liveClockSeconds * 1000L)
+                    mainHandler.postDelayed(this, 1000)
+                }
+            }
+        }
+        mainHandler.postDelayed(clockTickerRunnable!!, 1000)
+    }
+
+    private fun stopClockTicker() {
+        clockTickerRunnable?.let { mainHandler.removeCallbacks(it) }
+        clockTickerRunnable = null
+    }
+
     private fun getActiveEvents(): List<State> {
         val list = mutableListOf<State>()
         if (IslandCallManager.currentState != IslandCallManager.CallState.NONE) list.add(State.CALL_COMPACT)
@@ -964,6 +1158,7 @@ object IslandOverlayManager {
         activeNotificationPendingIntent = null
         activeRemoteInput = null
         activeReplyIntent = null
+        activeNotificationActions = null
     }
 
     private fun handleNotificationLaunch(context: Context) {
@@ -1165,12 +1360,25 @@ object IslandOverlayManager {
             compactEqualizer?.visibility = View.GONE
             islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
 
+            // Start live second-by-second ticker
+            val parts = extracted.split(":").mapNotNull { it.toLongOrNull() }
+            val totalSec = when (parts.size) {
+                3 -> parts[0] * 3600 + parts[1] * 60 + parts[2]
+                2 -> parts[0] * 60 + parts[1]
+                1 -> parts[0]
+                else -> 0L
+            }
+            if (totalSec > 0) {
+                startClockTicker(totalSec, isCountdown = isTimer)
+            }
+
             updateState(State.TIMER_COMPACT)
         }
     }
 
     fun clearExternalClockNotification() {
         isExternalClockActive = false
+        stopClockTicker()
         mainHandler.post {
             if (currentState == State.TIMER_COMPACT && IslandTimerManager.currentMode == IslandTimerManager.Mode.NONE) {
                 restorePreviousMediaOrIdle()
@@ -1368,11 +1576,15 @@ object IslandOverlayManager {
                                 restorePreviousMediaOrIdle()
                             }
                         }, 3500)
+                    } else if (prefs.batteryAlertsEnabled && batteryPercent >= 100) {
+                        displayDeviceEvent("BATTERY FULL", "100% Charged")
                     }
                 } else {
                     // Charger disconnected
                     updateSplitPillState()
-                    if (currentState == State.CHARGING_COMPACT) {
+                    if (prefs.batteryAlertsEnabled && batteryPercent <= 15) {
+                        displayDeviceEvent("LOW BATTERY", "$batteryPercent% remaining")
+                    } else if (currentState == State.CHARGING_COMPACT) {
                         restorePreviousMediaOrIdle()
                     }
                 }
@@ -1522,7 +1734,8 @@ object IslandOverlayManager {
         packageName: String = "",
         contentIntent: PendingIntent? = null,
         remoteInput: RemoteInput? = null,
-        replyIntent: PendingIntent? = null
+        replyIntent: PendingIntent? = null,
+        actions: Array<Notification.Action>? = null
     ) {
         val context = appContext ?: return
         val prefs = IslandPreferences(context)
@@ -1536,6 +1749,7 @@ object IslandOverlayManager {
         activeNotificationPendingIntent = contentIntent
         activeRemoteInput = remoteInput
         activeReplyIntent = replyIntent
+        activeNotificationActions = actions
         hasActiveNotification = true
 
         mainHandler.post {
@@ -2145,8 +2359,10 @@ object IslandOverlayManager {
                             }
                         )
                     } else if (hasActiveNotification && (activeNotificationTitle.isNotEmpty() || activeNotificationContent.isNotEmpty())) {
-                        // 4. Notification Card (with Quick Reply if messaging app)
+                        // 4. Notification Card (with Quick Reply and dynamic actions)
                         mediaControlsRow?.visibility = View.GONE
+                        mediaSeekBarRow?.visibility = View.GONE
+                        stopMusicProgressTracking()
                         callControlsRow?.visibility = View.GONE
                         timerControlsRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.VISIBLE
@@ -2170,8 +2386,25 @@ object IslandOverlayManager {
                         } else {
                             quickReplyRow?.visibility = View.GONE
                         }
+
+                        val actions = activeNotificationActions
+                        if (actions != null && actions.isNotEmpty()) {
+                            notificationActionsScroll?.visibility = View.VISIBLE
+                            populateNotificationActions(context, actions)
+                        } else {
+                            notificationActionsScroll?.visibility = View.GONE
+                        }
                     } else if (isMusicPlaying) {
                         mediaControlsRow?.visibility = View.VISIBLE
+                        if (prefs.mediaSeekbarEnabled) {
+                            mediaSeekBarRow?.visibility = View.VISIBLE
+                            startMusicProgressTracking()
+                        } else {
+                            mediaSeekBarRow?.visibility = View.GONE
+                            stopMusicProgressTracking()
+                        }
+                        quickReplyRow?.visibility = View.GONE
+                        notificationActionsScroll?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.GONE
                         btnPlayPause?.setImageResource(R.drawable.ic_pause)
                         expandedEqualizer?.isPlaying = true
@@ -2185,6 +2418,15 @@ object IslandOverlayManager {
                         expandedArtwork?.visibility = View.VISIBLE
                     } else if (currentTrackTitle.isNotEmpty()) {
                         mediaControlsRow?.visibility = View.VISIBLE
+                        if (prefs.mediaSeekbarEnabled) {
+                            mediaSeekBarRow?.visibility = View.VISIBLE
+                            startMusicProgressTracking()
+                        } else {
+                            mediaSeekBarRow?.visibility = View.GONE
+                            stopMusicProgressTracking()
+                        }
+                        quickReplyRow?.visibility = View.GONE
+                        notificationActionsScroll?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.GONE
                         btnPlayPause?.setImageResource(R.drawable.ic_play)
                         expandedEqualizer?.isPlaying = false
@@ -2198,6 +2440,10 @@ object IslandOverlayManager {
                         expandedArtwork?.visibility = View.VISIBLE
                     } else if (isDeviceCharging) {
                         mediaControlsRow?.visibility = View.GONE
+                        mediaSeekBarRow?.visibility = View.GONE
+                        stopMusicProgressTracking()
+                        quickReplyRow?.visibility = View.GONE
+                        notificationActionsScroll?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.VISIBLE
                         expandedAppIcon?.setImageResource(R.drawable.ic_bolt)
                         expandedArtwork?.setImageResource(R.drawable.ic_bolt)
@@ -2242,7 +2488,9 @@ object IslandOverlayManager {
     }
 
     fun collapseIsland() {
+        stopMusicProgressTracking()
         hasActiveNotification = false
+        activeNotificationActions = null
         restorePreviousMediaOrIdle()
     }
 
