@@ -222,7 +222,6 @@
                         android:id="@+id/textTrackElapsed"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:fontFamily="@font/ndot"
                         android:text="00:00"
                         android:textColor="@color/nothing_text_secondary"
                         android:textSize="10sp" />
@@ -243,7 +242,6 @@
                         android:id="@+id/textTrackDuration"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:fontFamily="@font/ndot"
                         android:text="00:00"
                         android:textColor="@color/nothing_text_secondary"
                         android:textSize="10sp" />
