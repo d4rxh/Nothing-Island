@@ -749,8 +749,9 @@ object IslandOverlayManager {
 
                     expandedAppIcon?.setImageResource(R.drawable.ic_bolt)
                     expandedSourceAppText?.text = "FAST CHARGING // GLYPH"
-                    expandedNotificationTitle?.text = "BATTERY CHARGING"
-                    expandedNotificationText?.text = "$batteryPercent% • Connected to Power"
+                    expandedTitleText?.text = "BATTERY CHARGING"
+                    expandedArtistText?.text = "$batteryPercent% • Connected to Power"
+                    expandedNotificationBody?.text = "$batteryPercent% • Connected to Power"
 
                     updateState(State.CHARGING_COMPACT)
 
@@ -1135,12 +1136,14 @@ object IslandOverlayManager {
                         expandedSourceAppText?.text = "FAST CHARGING // GLYPH"
                         expandedTitleText?.text = "BATTERY CHARGING"
                         expandedArtistText?.text = "$currentBatteryPercent% • Connected to Power"
+                        expandedNotificationBody?.text = "$currentBatteryPercent% • Connected to Power"
                     } else if (currentCricketScore.isNotEmpty()) {
                         mediaControlsRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.VISIBLE
                         expandedSourceAppText?.text = "LIVE CRICKET // ${currentCricketAppName.uppercase()}"
                         expandedTitleText?.text = currentCricketMatch
                         expandedArtistText?.text = currentCricketScore
+                        expandedNotificationBody?.text = "$currentCricketMatch\n$currentCricketScore"
                     } else {
                         mediaControlsRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.VISIBLE
@@ -1148,6 +1151,7 @@ object IslandOverlayManager {
                         expandedSourceAppText?.text = "NOTHING OS 3.0"
                         expandedTitleText?.text = "(NOT) ISLAND"
                         expandedArtistText?.text = "System active • Tap to collapse"
+                        expandedNotificationBody?.text = "System active • Tap to collapse"
                     }
                 }
             }
