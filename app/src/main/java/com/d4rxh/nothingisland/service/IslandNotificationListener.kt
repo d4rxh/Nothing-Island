@@ -1,5 +1,6 @@
 package com.d4rxh.nothingisland.service
 
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -160,19 +161,40 @@ class IslandNotificationListener : NotificationListenerService() {
         try {
             if (sbn == null || sbn.packageName == packageName) return
 
-            // Ignore system notifications spam
+            // Ignore system notifications spam & noisy background updates
             val ignoredPackages = setOf(
                 "android",
                 "com.android.systemui",
-                "com.google.android.gms"
+                "com.google.android.gms",
+                "com.google.android.googlequicksearchbox",
+                "com.android.vending",
+                "com.google.android.apps.restore",
+                "com.android.providers.downloads",
+                "com.nothing.heatservice",
+                "com.nothing.systemupdate"
             )
             if (ignoredPackages.contains(sbn.packageName)) return
+
+            // Ignore ongoing / foreground service sticky pins
+            if (sbn.isOngoing) return
+
+            val notification = sbn.notification ?: return
+            val extras = notification.extras ?: return
+
+            // Ignore progress bars (e.g. downloads, file transfers)
+            val maxProgress = extras.getInt(android.app.Notification.EXTRA_PROGRESS_MAX, 0)
+            if (maxProgress > 0) return
+
+            // Ignore group summaries with no direct text
+            if ((notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY) != 0 &&
+                !extras.containsKey("android.text") && !extras.containsKey("android.title")) {
+                return
+            }
 
             // If notification is from the currently active media player, ignore so music isn't interrupted
             val currentMediaPkg = IslandOverlayManager.getCurrentMediaPackage()
             if (currentMediaPkg.isNotEmpty() && sbn.packageName == currentMediaPkg) return
 
-            val extras = sbn.notification.extras ?: return
             val title = extras.getCharSequence("android.title")?.toString() ?: ""
             val text = extras.getCharSequence("android.text")?.toString() ?: ""
 
@@ -204,9 +226,19 @@ class IslandNotificationListener : NotificationListenerService() {
                 return
             }
 
-            // Standard Notification (ignore ongoing notifications like foreground service sticky pins)
-            if (!sbn.isOngoing && (title.isNotEmpty() || text.isNotEmpty())) {
-                IslandOverlayManager.onNotificationReceived(appName, title, text, appIcon, sbn.packageName)
+            // Extract native PendingIntent for direct, 100% reliable 1-tap app launch!
+            val contentIntent: PendingIntent? = notification.contentIntent
+
+            // Standard Notification
+            if (title.isNotEmpty() || text.isNotEmpty()) {
+                IslandOverlayManager.onNotificationReceived(
+                    appName = appName,
+                    title = title,
+                    content = text,
+                    appIcon = appIcon,
+                    packageName = sbn.packageName,
+                    contentIntent = contentIntent
+                )
             }
         } catch (e: Exception) {
             Log.e("NotificationListener", "Error in onNotificationPosted: ${e.message}", e)

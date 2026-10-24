@@ -131,9 +131,10 @@ class IslandOverlayService : Service() {
         title: String,
         content: String,
         appIcon: Drawable?,
-        packageName: String = ""
+        packageName: String = "",
+        contentIntent: PendingIntent? = null
     ) {
-        IslandOverlayManager.onNotificationReceived(appName, title, content, appIcon, packageName)
+        IslandOverlayManager.onNotificationReceived(appName, title, content, appIcon, packageName, contentIntent)
     }
 
     override fun onDestroy() {

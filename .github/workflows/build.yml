@@ -39,23 +39,23 @@ jobs:
       - name: Prepare APK for Artifact & Release
         run: |
           mkdir -p build-output
-          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.12.apk
+          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.13.apk
           ls -la build-output/
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Nothing-Island-v1.0.12
-          path: build-output/Nothing-Island-v1.0.12.apk
+          name: Nothing-Island-v1.0.13
+          path: build-output/Nothing-Island-v1.0.13.apk
           retention-days: 14
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          name: Nothing Island v1.0.12 (Live Charging %, Full Notification Expanded Card, Tap-to-Open & Cricket Spam Filter)
+          name: Nothing Island v1.0.13 (Portrait Notch Hug in Gaming, Continuous Charging, 1-Tap PendingIntent, Zero Ghost Views)
           tag_name: ${{ github.ref_name }}
-          files: build-output/Nothing-Island-v1.0.12.apk
+          files: build-output/Nothing-Island-v1.0.13.apk
           draft: false
           prerelease: false
           body: |

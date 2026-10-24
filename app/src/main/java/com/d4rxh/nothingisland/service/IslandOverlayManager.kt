@@ -2,6 +2,7 @@ package com.d4rxh.nothingisland.service
 
 import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -122,6 +123,7 @@ object IslandOverlayManager {
     private var activeNotificationContent = ""
     private var activeNotificationPackage = ""
     private var activeNotificationIcon: Drawable? = null
+    private var activeNotificationPendingIntent: PendingIntent? = null
     private var hasActiveNotification = false
 
     // Auto dismiss notification runnable
@@ -300,6 +302,14 @@ object IslandOverlayManager {
                     params.y = targetY
                 }
             }
+        }
+
+        // Keep Dynamic Island aligned in its natural portrait orientation along the camera notch
+        when (rotation) {
+            Surface.ROTATION_90 -> islandCapsule?.rotation = 90f
+            Surface.ROTATION_270 -> islandCapsule?.rotation = 270f
+            Surface.ROTATION_180 -> islandCapsule?.rotation = 180f
+            else -> islandCapsule?.rotation = 0f
         }
     }
 
@@ -579,13 +589,43 @@ object IslandOverlayManager {
     }
 
     private fun handleExpandedCardClick(context: Context) {
-        if (hasActiveNotification && activeNotificationPackage.isNotEmpty()) {
+        if (hasActiveNotification) {
+            handleNotificationLaunch(context)
+            return
+        }
+
+        if (currentPackageName.isNotEmpty()) {
+            openSourcePlayerApp(context)
+        } else {
+            collapseIsland()
+        }
+    }
+
+    private fun handleNotificationLaunch(context: Context) {
+        notificationDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+        notificationDismissRunnable = null
+
+        val pendingIntent = activeNotificationPendingIntent
+        if (pendingIntent != null) {
+            try {
+                pendingIntent.send()
+                hasActiveNotification = false
+                activeNotificationPendingIntent = null
+                collapseIsland()
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to send PendingIntent: ${e.message}")
+            }
+        }
+
+        if (activeNotificationPackage.isNotEmpty()) {
             try {
                 val launchIntent = context.packageManager.getLaunchIntentForPackage(activeNotificationPackage)
                 launchIntent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 if (launchIntent != null) {
                     context.startActivity(launchIntent)
                     hasActiveNotification = false
+                    activeNotificationPendingIntent = null
                     collapseIsland()
                     return
                 }
@@ -594,11 +634,8 @@ object IslandOverlayManager {
             }
         }
 
-        if (currentPackageName.isNotEmpty()) {
-            openSourcePlayerApp(context)
-        } else {
-            collapseIsland()
-        }
+        hasActiveNotification = false
+        collapseIsland()
     }
 
     private fun openSourcePlayerApp(context: Context) {
@@ -617,12 +654,19 @@ object IslandOverlayManager {
     }
 
     private fun handleIslandTap() {
+        val context = appContext ?: return
+        val prefs = IslandPreferences(context)
+        if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(overlayView)
+
+        // If a notification is active, clicking the island capsule OPENS the notifying app immediately!
+        if (hasActiveNotification) {
+            handleNotificationLaunch(context)
+            return
+        }
+
         if (currentState == State.EXPANDED) {
             collapseIsland()
         } else {
-            // Cancel notification auto-dismiss timer so user has time to read
-            notificationDismissRunnable?.let { mainHandler.removeCallbacks(it) }
-            notificationDismissRunnable = null
             expandIsland()
         }
     }
@@ -786,6 +830,8 @@ object IslandOverlayManager {
             try {
                 if (isCharging) {
                     expandedAppIcon?.setImageResource(R.drawable.ic_bolt)
+                    expandedArtwork?.setImageResource(R.drawable.ic_bolt)
+                    expandedArtwork?.visibility = View.VISIBLE
                     expandedSourceAppText?.text = "FAST CHARGING // GLYPH"
                     expandedTitleText?.text = "BATTERY CHARGING"
                     expandedArtistText?.text = "$batteryPercent% • Connected to Power"
@@ -795,32 +841,16 @@ object IslandOverlayManager {
                         compactRightText?.text = "$batteryPercent%"
                     }
 
-                    if (isFirstConnect) {
-                        if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(context)
+                    if (isFirstConnect && prefs.hapticsEnabled) {
+                        NothingHapticHelper.vibratePop(context)
+                    }
 
-                        compactLeftIcon?.setImageResource(R.drawable.ic_bolt)
-                        compactLeftIcon?.visibility = View.VISIBLE
-                        compactLeftText?.visibility = View.GONE
-
-                        centerCutoutSpacer?.visibility = View.VISIBLE
-
-                        compactRightText?.text = "$batteryPercent%"
-                        compactRightText?.visibility = View.VISIBLE
-
-                        // STOP and HIDE equalizer during charging
-                        compactEqualizer?.isPlaying = false
-                        compactEqualizer?.visibility = View.GONE
-
-                        updateState(State.CHARGING_COMPACT)
-
-                        // Auto revert back to MUSIC or IDLE after 4.5 seconds
-                        mainHandler.postDelayed({
-                            if (currentState == State.CHARGING_COMPACT) {
-                                restorePreviousMediaOrIdle()
-                            }
-                        }, 4500)
+                    // If music is NOT playing and no notification, maintain CHARGING_COMPACT continuously!
+                    if (!isMusicPlaying && !hasActiveNotification && currentState != State.EXPANDED) {
+                        displayChargingCompact()
                     }
                 } else {
+                    // Charger disconnected
                     if (currentState == State.CHARGING_COMPACT) {
                         restorePreviousMediaOrIdle()
                     }
@@ -831,12 +861,34 @@ object IslandOverlayManager {
         }
     }
 
+    private fun displayChargingCompact() {
+        val context = appContext ?: return
+        val prefs = IslandPreferences(context)
+
+        compactLeftIcon?.setImageResource(R.drawable.ic_bolt)
+        compactLeftIcon?.visibility = View.VISIBLE
+        compactLeftText?.visibility = View.GONE
+
+        centerCutoutSpacer?.visibility = View.VISIBLE
+
+        compactRightText?.text = "$currentBatteryPercent%"
+        compactRightText?.visibility = View.VISIBLE
+
+        // STOP and HIDE equalizer during charging
+        compactEqualizer?.isPlaying = false
+        compactEqualizer?.visibility = View.GONE
+
+        islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
+        updateState(State.CHARGING_COMPACT)
+    }
+
     fun onNotificationReceived(
         appName: String,
         title: String,
         content: String,
         appIcon: Drawable?,
-        packageName: String = ""
+        packageName: String = "",
+        contentIntent: PendingIntent? = null
     ) {
         val context = appContext ?: return
         val prefs = IslandPreferences(context)
@@ -847,6 +899,7 @@ object IslandOverlayManager {
         activeNotificationContent = content
         activeNotificationPackage = packageName
         activeNotificationIcon = appIcon
+        activeNotificationPendingIntent = contentIntent
         hasActiveNotification = true
 
         mainHandler.post {
@@ -897,9 +950,10 @@ object IslandOverlayManager {
 
                 updateState(State.NOTIFICATION_COMPACT)
 
-                // Auto dismiss notification banner after 6.0 seconds and revert to music
+                // Auto dismiss notification banner after 6.0 seconds and revert to music or charging
                 notificationDismissRunnable = Runnable {
                     hasActiveNotification = false
+                    activeNotificationPendingIntent = null
                     dismissNotificationAndRestore()
                 }
                 mainHandler.postDelayed(notificationDismissRunnable!!, 6000)
@@ -914,6 +968,7 @@ object IslandOverlayManager {
         activeNotificationTitle = ""
         activeNotificationContent = ""
         activeNotificationPackage = ""
+        activeNotificationPendingIntent = null
         mainHandler.post {
             dismissNotificationAndRestore()
         }
@@ -1025,6 +1080,8 @@ object IslandOverlayManager {
             } else {
                 restoreMusicCompactState(isPlaying = false)
             }
+        } else if (isDeviceCharging) {
+            displayChargingCompact()
         } else if (currentCricketScore.isNotEmpty()) {
             displayCricketCompact()
         } else {
@@ -1229,15 +1286,33 @@ object IslandOverlayManager {
                         expandedNotificationBody?.visibility = View.GONE
                         btnPlayPause?.setImageResource(R.drawable.ic_pause)
                         expandedEqualizer?.isPlaying = true
+                        if (currentArtwork != null) {
+                            expandedArtwork?.setImageBitmap(currentArtwork)
+                        } else if (currentAppIcon != null) {
+                            expandedArtwork?.setImageDrawable(currentAppIcon)
+                        } else {
+                            expandedArtwork?.setImageResource(R.drawable.ic_music)
+                        }
+                        expandedArtwork?.visibility = View.VISIBLE
                     } else if (currentTrackTitle.isNotEmpty()) {
                         mediaControlsRow?.visibility = View.VISIBLE
                         expandedNotificationBody?.visibility = View.GONE
                         btnPlayPause?.setImageResource(R.drawable.ic_play)
                         expandedEqualizer?.isPlaying = false
+                        if (currentArtwork != null) {
+                            expandedArtwork?.setImageBitmap(currentArtwork)
+                        } else if (currentAppIcon != null) {
+                            expandedArtwork?.setImageDrawable(currentAppIcon)
+                        } else {
+                            expandedArtwork?.setImageResource(R.drawable.ic_music)
+                        }
+                        expandedArtwork?.visibility = View.VISIBLE
                     } else if (isDeviceCharging) {
                         mediaControlsRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.VISIBLE
                         expandedAppIcon?.setImageResource(R.drawable.ic_bolt)
+                        expandedArtwork?.setImageResource(R.drawable.ic_bolt)
+                        expandedArtwork?.visibility = View.VISIBLE
                         expandedSourceAppText?.text = "FAST CHARGING // GLYPH"
                         expandedTitleText?.text = "BATTERY CHARGING"
                         expandedArtistText?.text = "$currentBatteryPercent% • Connected to Power"
@@ -1245,6 +1320,12 @@ object IslandOverlayManager {
                     } else if (currentCricketScore.isNotEmpty()) {
                         mediaControlsRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.VISIBLE
+                        if (currentCricketAppIcon != null) {
+                            expandedArtwork?.setImageDrawable(currentCricketAppIcon)
+                        } else {
+                            expandedArtwork?.setImageResource(R.drawable.ic_cricket)
+                        }
+                        expandedArtwork?.visibility = View.VISIBLE
                         expandedSourceAppText?.text = "LIVE CRICKET // ${currentCricketAppName.uppercase()}"
                         expandedTitleText?.text = currentCricketMatch
                         expandedArtistText?.text = currentCricketScore
@@ -1253,6 +1334,8 @@ object IslandOverlayManager {
                         mediaControlsRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.VISIBLE
                         expandedAppIcon?.setImageResource(R.drawable.app_logo)
+                        expandedArtwork?.setImageResource(R.drawable.app_logo)
+                        expandedArtwork?.visibility = View.VISIBLE
                         expandedSourceAppText?.text = "NOTHING OS 3.0"
                         expandedTitleText?.text = "(NOT) ISLAND"
                         expandedArtistText?.text = "System active • Tap to collapse"
