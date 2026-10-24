@@ -827,7 +827,7 @@ object IslandOverlayManager {
                 isUserSeeking = false
                 val newPos = seekBar?.progress?.toLong() ?: return
                 IslandMediaManager.seekTo(newPos)
-                if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(context)
+                if (prefs.hapticsEnabled && seekBar != null) NothingHapticHelper.vibrateTick(seekBar)
             }
         })
 
@@ -983,7 +983,7 @@ object IslandOverlayManager {
                 text = title.uppercase()
                 setTextColor(Color.WHITE)
                 textSize = 10f
-                typeface = TypefaceHelper.getNdotTypeface(context)
+                typeface = TypefaceHelper.getNdot(context)
                 setBackgroundResource(R.drawable.bg_action_pill)
                 val padH = dpToPx(context, 12)
                 val padV = dpToPx(context, 6)
@@ -997,7 +997,7 @@ object IslandOverlayManager {
                 layoutParams = lp
 
                 setOnClickListener {
-                    NothingHapticHelper.triggerMedium(context)
+                    if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(context)
                     val rInputs = action.remoteInputs
                     if (rInputs != null && rInputs.isNotEmpty()) {
                         activeRemoteInput = rInputs[0]
