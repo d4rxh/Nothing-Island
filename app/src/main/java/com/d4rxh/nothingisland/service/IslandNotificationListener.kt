@@ -23,7 +23,11 @@ class IslandNotificationListener : NotificationListenerService() {
 
     private val activeSessionsListener =
         MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
-            updateMediaController(controllers?.firstOrNull())
+            val active = controllers?.firstOrNull { c ->
+                val state = c.playbackState?.state
+                state == PlaybackState.STATE_PLAYING || state == PlaybackState.STATE_BUFFERING
+            } ?: controllers?.firstOrNull()
+            updateMediaController(active)
         }
 
     private var currentController: MediaController? = null
@@ -34,6 +38,10 @@ class IslandNotificationListener : NotificationListenerService() {
 
         override fun onMetadataChanged(metadata: MediaMetadata?) {
             dispatchMediaUpdate()
+        }
+
+        override fun onSessionDestroyed() {
+            IslandOverlayManager.clearMediaPlayback()
         }
     }
 
@@ -72,6 +80,8 @@ class IslandNotificationListener : NotificationListenerService() {
             if (controller != null) {
                 controller.registerCallback(callback, mainHandler)
                 dispatchMediaUpdate()
+            } else {
+                IslandOverlayManager.clearMediaPlayback()
             }
         } catch (e: Exception) {
             Log.e("NotificationListener", "Error updating media controller: ${e.message}", e)
@@ -80,13 +90,28 @@ class IslandNotificationListener : NotificationListenerService() {
 
     private fun dispatchMediaUpdate() {
         try {
-            val controller = currentController ?: return
+            val controller = currentController
+            if (controller == null) {
+                IslandOverlayManager.clearMediaPlayback()
+                return
+            }
+
             val metadata = controller.metadata
             val state = controller.playbackState
 
-            val isPlaying = state?.state == PlaybackState.STATE_PLAYING
+            if (state == null || state.state == PlaybackState.STATE_NONE || state.state == PlaybackState.STATE_STOPPED) {
+                IslandOverlayManager.clearMediaPlayback()
+                return
+            }
+
+            val isPlaying = state.state == PlaybackState.STATE_PLAYING
             val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
             val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
+
+            if (title.isEmpty() && !isPlaying) {
+                IslandOverlayManager.clearMediaPlayback()
+                return
+            }
 
             // Safe artwork extraction
             val rawArtwork: Bitmap? = try {
@@ -180,7 +205,15 @@ class IslandNotificationListener : NotificationListenerService() {
         super.onNotificationRemoved(sbn)
         try {
             if (sbn == null || sbn.packageName == packageName) return
-            // When user dismisses notification from shade, restore music state immediately
+
+            val currentMediaPkg = IslandOverlayManager.getCurrentMediaPackage()
+            if (currentMediaPkg.isNotEmpty() && sbn.packageName == currentMediaPkg) {
+                // Active media playback notification was dismissed from notification panel!
+                IslandOverlayManager.clearMediaPlayback()
+                return
+            }
+
+            // When user dismisses notification from shade, restore state immediately
             IslandOverlayManager.onNotificationDismissed()
         } catch (e: Exception) {
             Log.e("NotificationListener", "Error in onNotificationRemoved: ${e.message}", e)

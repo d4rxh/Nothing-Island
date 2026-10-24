@@ -28,6 +28,7 @@ class IslandOverlayService : Service() {
         super.onCreate()
         instance = this
         startForegroundSafely()
+        IslandOverlayManager.registerBatteryReceiver(this)
         IslandOverlayManager.showOverlay(this)
     }
 

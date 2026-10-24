@@ -39,35 +39,33 @@ jobs:
       - name: Prepare APK for Artifact & Release
         run: |
           mkdir -p build-output
-          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.10.apk
+          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.11.apk
           ls -la build-output/
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Nothing-Island-v1.0.10
-          path: build-output/Nothing-Island-v1.0.10.apk
+          name: Nothing-Island-v1.0.11
+          path: build-output/Nothing-Island-v1.0.11.apk
           retention-days: 14
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          name: Nothing Island v1.0.10 (Landscape Auto-Hide, Paused Music Persistence, Zero Emojis & NDot Typography)
+          name: Nothing Island v1.0.11 (Landscape Camera Notch Anchor, Instant Media Dismissal & Dynamic Battery Receiver)
           tag_name: ${{ github.ref_name }}
-          files: build-output/Nothing-Island-v1.0.10.apk
+          files: build-output/Nothing-Island-v1.0.11.apk
           draft: false
           prerelease: false
           body: |
-            ## (NOT) ISLAND v1.0.10 // Production Release
+            ## (NOT) ISLAND v1.0.11 // Production Release
 
             ### What's New & Fixed:
-            - **Landscape Gaming & Video Auto-Hide**: Detects orientation changes (`ORIENTATION_LANDSCAPE`) and automatically hides the island when entering games (BGMI, COD, PUBG) or fullscreen videos (YouTube, Netflix) so it does not drift to the top of the landscape screen or block in-game UI.
-            - **Notification Equalizer Isolation**: Fixed notification beat bug. The dot-matrix equalizer animator is explicitly stopped and hidden whenever a heads-up notification or call arrives.
-            - **Persistent Paused Music Player**: Music pausing no longer resets the Dynamic Island to IDLE. It transitions gracefully into `MUSIC_PAUSED_COMPACT` with flat indicator dots and provides an instant PLAY (▶) control in the expanded card to resume playback anytime.
-            - **Strict Zero Emojis**: Replaced all emojis throughout the app with authentic Nothing OS 3.0 brutalist typography.
-            - **System-Wide NDot57 Typography**: Recursively applied Nothing's iconic `ndot57.otf` font across all TextViews, Buttons, Badges, and overlay cards.
-            - **100% On-Device Privacy & Security Audit**: Zero internet permission (`android.permission.INTERNET` absent from manifest), zero telemetry, zero analytics.
+            - **Landscape Gaming Camera Notch Anchor**: During gaming (BGMI, COD, PUBG) or landscape fullscreen videos, the island stays strictly anchored around the physical camera punch-hole on the left/right bezel via hardware `DisplayCutout` coordinates. It never jumps to the top long edge or obstructs gameplay.
+            - **Instant Real-Time Media Dismissal**: Swiping away Spotify from recent apps, stopping playback, or dismissing media notifications now immediately clears the island and restores IDLE state.
+            - **Reliable Dynamic Charging & Battery Broadcast**: Added dynamic runtime broadcast receiver for `ACTION_POWER_CONNECTED`, `ACTION_POWER_DISCONNECTED`, and `ACTION_BATTERY_CHANGED`. Fast charging glyph, battery percentage, and tactile haptic feedback trigger instantly upon cable connection.
+            - **Zero Emojis & System-Wide NDot57 Font**: Pure Nothing OS 3.0 brutalist typography.
 
             ### Direct APK Download
-            **[Nothing-Island-v1.0.10.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.10/Nothing-Island-v1.0.10.apk)**
+            **[Nothing-Island-v1.0.11.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.11/Nothing-Island-v1.0.11.apk)**

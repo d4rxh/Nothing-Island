@@ -2,13 +2,17 @@ package com.d4rxh.nothingisland.service
 
 import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.hardware.display.DisplayManager
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -19,6 +23,7 @@ import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.Surface
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -104,9 +109,19 @@ object IslandOverlayManager {
     private var currentCricketAppName = ""
     private var currentCricketAppIcon: Drawable? = null
 
+    // Battery & Charging state persistence
+    private var currentBatteryPercent = 85
+    private var isDeviceCharging = false
+    private var batteryReceiver: BroadcastReceiver? = null
+    private var isBatteryReceiverRegistered = false
+    private var displayListener: DisplayManager.DisplayListener? = null
+
     // Auto dismiss notification runnable
     private var notificationDismissRunnable: Runnable? = null
     private var pausedTimeoutRunnable: Runnable? = null
+
+    fun getCurrentState(): State = currentState
+    fun getCurrentMediaPackage(): String = currentPackageName
 
     fun setAccessibilityService(service: AccessibilityService?) {
         accessibilityService = service
@@ -119,16 +134,178 @@ object IslandOverlayManager {
         }
     }
 
-    fun onOrientationChanged(isLandscape: Boolean) {
-        val context = appContext ?: return
-        val prefs = IslandPreferences(context)
-        mainHandler.post {
-            if (prefs.hideInLandscape && isLandscape) {
-                // Auto-hide in landscape mode to prevent blocking games or full-screen videos
-                overlayView?.visibility = View.GONE
+    private fun registerDisplayListener(context: Context) {
+        if (displayListener != null) return
+        val dm = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return
+        displayListener = object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) {}
+            override fun onDisplayRemoved(displayId: Int) {}
+            override fun onDisplayChanged(displayId: Int) {
+                onOrientationChanged()
+            }
+        }
+        try {
+            dm.registerDisplayListener(displayListener, mainHandler)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error registering display listener: ${e.message}")
+        }
+    }
+
+    fun registerBatteryReceiver(context: Context) {
+        if (isBatteryReceiverRegistered) return
+        batteryReceiver = object : BroadcastReceiver() {
+            private var lastIsCharging: Boolean? = null
+
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent == null) return
+                val action = intent.action ?: return
+
+                val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+                val isCharging = action == Intent.ACTION_POWER_CONNECTED ||
+                        status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                        status == BatteryManager.BATTERY_STATUS_FULL
+
+                val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+                val percent = if (level >= 0 && scale > 0) {
+                    (level * 100) / scale
+                } else {
+                    val bm = ctx?.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+                    bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 85
+                }
+
+                if (action == Intent.ACTION_POWER_CONNECTED || (isCharging && lastIsCharging != true)) {
+                    lastIsCharging = true
+                    onChargingChanged(true, percent)
+                } else if (action == Intent.ACTION_POWER_DISCONNECTED || (!isCharging && lastIsCharging == true)) {
+                    lastIsCharging = false
+                    onChargingChanged(false, percent)
+                }
+            }
+        }
+
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_POWER_CONNECTED)
+            addAction(Intent.ACTION_POWER_DISCONNECTED)
+            addAction(Intent.ACTION_BATTERY_CHANGED)
+        }
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.applicationContext.registerReceiver(batteryReceiver, filter, Context.RECEIVER_EXPORTED)
             } else {
-                overlayView?.visibility = View.VISIBLE
+                context.applicationContext.registerReceiver(batteryReceiver, filter)
+            }
+            isBatteryReceiverRegistered = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register battery receiver: ${e.message}")
+        }
+    }
+
+    private fun updateLayoutParamsForOrientation(context: Context, params: WindowManager.LayoutParams) {
+        val prefs = IslandPreferences(context)
+        val wm = windowManager ?: return
+
+        val rotation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                context.display?.rotation ?: Surface.ROTATION_0
+            } catch (e: Exception) {
+                wm.defaultDisplay?.rotation ?: Surface.ROTATION_0
+            }
+        } else {
+            wm.defaultDisplay?.rotation ?: Surface.ROTATION_0
+        }
+
+        val targetY = if (prefs.attachToTop) 0 else dpToPx(context, prefs.yOffset)
+        val targetX = dpToPx(context, prefs.xOffset)
+
+        val insets = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                wm.currentWindowMetrics.windowInsets
+            } catch (e: Exception) {
+                overlayView?.rootWindowInsets
+            }
+        } else {
+            overlayView?.rootWindowInsets
+        }
+
+        val cutout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            insets?.displayCutout
+        } else null
+
+        val bounds = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            cutout?.boundingRects
+        } else null
+
+        val metrics = context.resources.displayMetrics
+        val screenWidth = metrics.widthPixels
+        val screenHeight = metrics.heightPixels
+
+        if (bounds != null && bounds.isNotEmpty()) {
+            val rect = bounds[0]
+            val cx = rect.centerX()
+            val cy = rect.centerY()
+
+            if (rect.left <= 25 || cx < screenWidth / 3) {
+                // Cutout is on the LEFT edge (Landscape ROTATION_90)
+                params.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                params.x = if (prefs.attachToTop) 0 else rect.left
+                params.y = cy - (screenHeight / 2) + targetX
+            } else if (rect.right >= screenWidth - 25 || cx > (2 * screenWidth) / 3) {
+                // Cutout is on the RIGHT edge (Landscape ROTATION_270)
+                params.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                params.x = if (prefs.attachToTop) 0 else (screenWidth - rect.right)
+                params.y = cy - (screenHeight / 2) - targetX
+            } else {
+                // Cutout is on the TOP edge (Portrait ROTATION_0)
+                params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                params.x = cx - (screenWidth / 2) + targetX
+                params.y = if (prefs.attachToTop) 0 else rect.top
+            }
+        } else {
+            when (rotation) {
+                Surface.ROTATION_90 -> {
+                    // Landscape gaming mode: camera notch on the LEFT edge
+                    params.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    params.x = targetY
+                    params.y = targetX
+                }
+                Surface.ROTATION_270 -> {
+                    // Reverse landscape: camera notch on the RIGHT edge
+                    params.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                    params.x = targetY
+                    params.y = -targetX
+                }
+                Surface.ROTATION_180 -> {
+                    params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                    params.x = -targetX
+                    params.y = targetY
+                }
+                else -> {
+                    // Standard portrait: camera notch on TOP
+                    params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                    params.x = targetX
+                    params.y = targetY
+                }
+            }
+        }
+    }
+
+    fun onOrientationChanged() {
+        val context = appContext ?: return
+        val view = overlayView ?: return
+        val wm = windowManager ?: return
+        val params = layoutParams ?: return
+
+        mainHandler.post {
+            try {
+                updateLayoutParamsForOrientation(context, params)
+                view.visibility = View.VISIBLE
+                wm.updateViewLayout(view, params)
+                view.requestLayout()
                 applyStateVisibilities(currentState)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating orientation layout: ${e.message}", e)
             }
         }
     }
@@ -140,6 +317,9 @@ object IslandOverlayManager {
             Log.w(TAG, "Cannot show overlay: overlay permission not granted")
             return
         }
+
+        registerDisplayListener(context)
+        registerBatteryReceiver(context)
 
         mainHandler.post {
             try {
@@ -237,6 +417,7 @@ object IslandOverlayManager {
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
         }
+        updateLayoutParamsForOrientation(context, params)
         layoutParams = params
 
         try {
@@ -337,8 +518,8 @@ object IslandOverlayManager {
             collapseIsland()
         }
 
-        islandRoot?.onOrientationChanged = { isLandscape ->
-            onOrientationChanged(isLandscape)
+        islandRoot?.onOrientationChanged = {
+            onOrientationChanged()
         }
 
         // Tapping expanded header row collapses the card
@@ -419,6 +600,30 @@ object IslandOverlayManager {
         applyCustomStyling(context)
     }
 
+    fun clearMediaPlayback() {
+        currentTrackTitle = ""
+        currentArtistName = ""
+        currentPackageName = ""
+        isMusicPlaying = false
+        currentArtwork = null
+        currentAppIcon = null
+        pausedTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        pausedTimeoutRunnable = null
+
+        mainHandler.post {
+            compactEqualizer?.isPlaying = false
+            compactEqualizer?.visibility = View.GONE
+            expandedEqualizer?.isPlaying = false
+            btnPlayPause?.setImageResource(R.drawable.ic_play)
+
+            if (currentState == State.MUSIC_COMPACT || currentState == State.MUSIC_PAUSED_COMPACT ||
+                (currentState == State.EXPANDED && !isDeviceCharging && currentCricketScore.isEmpty())
+            ) {
+                restorePreviousMediaOrIdle()
+            }
+        }
+    }
+
     fun onMediaStateChanged(
         packageName: String,
         appName: String,
@@ -487,7 +692,7 @@ object IslandOverlayManager {
                             updateState(State.MUSIC_COMPACT)
                         }
                     } else {
-                        // PAUSED STATE (FIXED: Never collapse to IDLE immediately! Show Play button so user can resume!)
+                        // PAUSED STATE: Show Play button and persist for 25s
                         compactEqualizer?.visibility = View.VISIBLE
                         compactEqualizer?.isPlaying = false
                         expandedEqualizer?.isPlaying = false
@@ -499,20 +704,16 @@ object IslandOverlayManager {
                             updateState(State.MUSIC_PAUSED_COMPACT)
                         }
 
-                        // Graceful timeout: only collapse to IDLE if paused for 10 full minutes
+                        // Graceful timeout: auto-collapse if paused without activity for 25 seconds
                         pausedTimeoutRunnable = Runnable {
                             if (!isMusicPlaying) {
-                                updateState(State.IDLE)
+                                clearMediaPlayback()
                             }
                         }
-                        mainHandler.postDelayed(pausedTimeoutRunnable!!, 600000)
+                        mainHandler.postDelayed(pausedTimeoutRunnable!!, 25000)
                     }
                 } else if (!isPlaying && (currentState == State.MUSIC_COMPACT || currentState == State.MUSIC_PAUSED_COMPACT)) {
-                    compactEqualizer?.isPlaying = false
-                    expandedEqualizer?.isPlaying = false
-                    btnPlayPause?.setImageResource(R.drawable.ic_play)
-                    islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
-                    updateState(State.IDLE)
+                    clearMediaPlayback()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onMediaStateChanged UI update: ${e.message}", e)
@@ -525,12 +726,19 @@ object IslandOverlayManager {
         val prefs = IslandPreferences(context)
         if (!prefs.chargingIslandEnabled) return
 
+        currentBatteryPercent = batteryPercent
+        isDeviceCharging = isCharging
+
         mainHandler.post {
             try {
                 if (isCharging) {
+                    if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(context)
+
                     compactLeftIcon?.setImageResource(R.drawable.ic_bolt)
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
+
+                    centerCutoutSpacer?.visibility = View.VISIBLE
 
                     compactRightText?.text = "$batteryPercent%"
                     compactRightText?.visibility = View.VISIBLE
@@ -539,14 +747,19 @@ object IslandOverlayManager {
                     compactEqualizer?.isPlaying = false
                     compactEqualizer?.visibility = View.GONE
 
+                    expandedAppIcon?.setImageResource(R.drawable.ic_bolt)
+                    expandedSourceAppText?.text = "FAST CHARGING // GLYPH"
+                    expandedNotificationTitle?.text = "BATTERY CHARGING"
+                    expandedNotificationText?.text = "$batteryPercent% • Connected to Power"
+
                     updateState(State.CHARGING_COMPACT)
 
-                    // Auto revert back to MUSIC or IDLE after 4 seconds
+                    // Auto revert back to MUSIC or IDLE after 4.5 seconds
                     mainHandler.postDelayed({
                         if (currentState == State.CHARGING_COMPACT) {
                             restorePreviousMediaOrIdle()
                         }
-                    }, 4000)
+                    }, 4500)
                 } else {
                     if (currentState == State.CHARGING_COMPACT) {
                         restorePreviousMediaOrIdle()
@@ -867,6 +1080,7 @@ object IslandOverlayManager {
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
                     centerCutoutSpacer?.visibility = View.VISIBLE
+                    compactRightText?.text = "$currentBatteryPercent%"
                     compactRightText?.visibility = View.VISIBLE
 
                     compactEqualizer?.isPlaying = false
@@ -914,9 +1128,26 @@ object IslandOverlayManager {
                         expandedNotificationBody?.visibility = View.GONE
                         btnPlayPause?.setImageResource(R.drawable.ic_play)
                         expandedEqualizer?.isPlaying = false
+                    } else if (isDeviceCharging) {
+                        mediaControlsRow?.visibility = View.GONE
+                        expandedNotificationBody?.visibility = View.VISIBLE
+                        expandedAppIcon?.setImageResource(R.drawable.ic_bolt)
+                        expandedSourceAppText?.text = "FAST CHARGING // GLYPH"
+                        expandedTitleText?.text = "BATTERY CHARGING"
+                        expandedArtistText?.text = "$currentBatteryPercent% • Connected to Power"
+                    } else if (currentCricketScore.isNotEmpty()) {
+                        mediaControlsRow?.visibility = View.GONE
+                        expandedNotificationBody?.visibility = View.VISIBLE
+                        expandedSourceAppText?.text = "LIVE CRICKET // ${currentCricketAppName.uppercase()}"
+                        expandedTitleText?.text = currentCricketMatch
+                        expandedArtistText?.text = currentCricketScore
                     } else {
                         mediaControlsRow?.visibility = View.GONE
                         expandedNotificationBody?.visibility = View.VISIBLE
+                        expandedAppIcon?.setImageResource(R.drawable.app_logo)
+                        expandedSourceAppText?.text = "NOTHING OS 3.0"
+                        expandedTitleText?.text = "(NOT) ISLAND"
+                        expandedArtistText?.text = "System active • Tap to collapse"
                     }
                 }
             }

@@ -1052,7 +1052,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Landscape Gaming &amp; Video Mode"
+                            android:text="Hide In Landscape (Games &amp; Videos)"
                             android:textColor="@color/nothing_white"
                             android:textSize="13sp"
                             android:textStyle="bold" />
@@ -1060,7 +1060,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Auto-hide island when playing games or full-screen video"
+                            android:text="Turn on to completely hide island during games. Off = anchors to camera notch"
                             android:textColor="@color/nothing_text_secondary"
                             android:textSize="11sp" />
                     </LinearLayout>
@@ -1069,7 +1069,7 @@
                         android:id="@+id/switchHideInLandscape"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:checked="true"
+                        android:checked="false"
                         app:thumbTint="@color/nothing_white"
                         app:trackTint="@color/nothing_red" />
                 </LinearLayout>

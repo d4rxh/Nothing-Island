@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/d4rxh/Nothing-Island/releases"><img src="https://img.shields.io/github/v/release/d4rxh/Nothing-Island?style=for-the-badge&color=D71920&label=RELEASE%20v1.0.10" alt="Release"/></a>
+  <a href="https://github.com/d4rxh/Nothing-Island/releases"><img src="https://img.shields.io/github/v/release/d4rxh/Nothing-Island?style=for-the-badge&color=D71920&label=RELEASE%20v1.0.11" alt="Release"/></a>
   <img src="https://img.shields.io/badge/LICENSED-MIT-white?style=for-the-badge" alt="MIT License"/>
   <img src="https://img.shields.io/badge/NOTHING%20OS-3.0%20READY-black?style=for-the-badge&logoColor=white" alt="Nothing OS 3.0 Ready"/>
   <img src="https://img.shields.io/badge/DATA%20PRIVACY-100%25%20ON--DEVICE-green?style=for-the-badge" alt="100% On-Device"/>
@@ -81,13 +81,12 @@ Unlike conventional iOS Dynamic Island mimics that rely on bloated animation lib
 * **Expanded Media Console (`EXPANDED`):**
   * Tapping the compact pill seamlessly expands into a 290dp Nothing OS brutalist control card featuring marquee track titles, artist metadata, a dedicated Play/Pause toggle (displaying `PLAY` when paused, `PAUSE` when playing), track skipping controls, and interactive waveform scrubbers.
 
-### 2. Intelligent Landscape Gaming & Video Auto-Hide
-* **Orientation Awareness:**
-  * In standard Android window managers, status bar overlays drift awkwardly to the upper bezel when the screen rotates to landscape, obstructing in-game HUDs (PUBG, BGMI, Call of Duty) or video player interfaces (YouTube, Netflix).
-* **Zero-Interference Gaming Engine:**
-  * `IslandRootLayout` observes window configuration changes via `onConfigurationChanged(newConfig)`.
-  * When `newConfig.orientation == ORIENTATION_LANDSCAPE` and `hideInLandscape` is enabled (default: true), the entire overlay instantly hides.
-  * Upon returning to portrait mode, the capsule restores seamlessly to its calibrated position.
+### 2. Intelligent Landscape Camera Notch Anchor
+* **Orientation & Cutout Awareness:**
+  * In standard Android window managers, status bar overlays drift awkwardly to the upper bezel when the screen rotates to landscape, drifting far away from the physical camera punch-hole and obstructing in-game HUDs (PUBG, BGMI, Call of Duty).
+* **Hardware Notch Anchoring Engine:**
+  * `IslandOverlayManager` listens to display orientation changes and queries real-time hardware `DisplayCutout` coordinates.
+  * In landscape mode (`ROTATION_90` or `ROTATION_270`), the island dynamically anchors around the physical camera hole on the left or right vertical bezel. It never moves to the top long edge, maintaining full camera concealment even during intense gaming and fullscreen video playback.
 
 ### 3. Edge-Disallow Touch Interception Pipeline
 * **Android Notification Shade Conflict Resolution:**
@@ -168,8 +167,8 @@ cd Nothing-Island
 
 ### Direct Download
 Grab the latest signed production APK directly from GitHub Releases:
-* **Release:** [Nothing Island v1.0.10](https://github.com/d4rxh/Nothing-Island/releases/tag/v1.0.10)
-* **Direct APK Download:** **[Nothing-Island-v1.0.10.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.10/Nothing-Island-v1.0.10.apk)**
+* **Release:** [Nothing Island v1.0.11](https://github.com/d4rxh/Nothing-Island/releases/tag/v1.0.11)
+* **Direct APK Download:** **[Nothing-Island-v1.0.11.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.11/Nothing-Island-v1.0.11.apk)**
 
 ---
 

@@ -326,6 +326,9 @@ class MainActivity : AppCompatActivity() {
 
         switchMusicIsland.setOnCheckedChangeListener { _, isChecked ->
             prefs.musicIslandEnabled = isChecked
+            if (!isChecked) {
+                IslandOverlayManager.clearMediaPlayback()
+            }
         }
 
         switchChargingIsland.setOnCheckedChangeListener { _, isChecked ->

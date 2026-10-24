@@ -66,7 +66,7 @@ class IslandPreferences(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_ATTACH_TO_TOP, value).apply()
 
     var hideInLandscape: Boolean
-        get() = prefs.getBoolean(KEY_HIDE_IN_LANDSCAPE, true)
+        get() = prefs.getBoolean(KEY_HIDE_IN_LANDSCAPE, false)
         set(value) = prefs.edit().putBoolean(KEY_HIDE_IN_LANDSCAPE, value).apply()
 
     companion object {

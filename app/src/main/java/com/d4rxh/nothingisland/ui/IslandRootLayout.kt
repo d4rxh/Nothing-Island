@@ -23,7 +23,7 @@ class IslandRootLayout @JvmOverloads constructor(
     var onIslandTap: (() -> Unit)? = null
     var onIslandCollapse: (() -> Unit)? = null
     var onIslandSwipeDismiss: (() -> Unit)? = null
-    var onOrientationChanged: ((isLandscape: Boolean) -> Unit)? = null
+    var onOrientationChanged: (() -> Unit)? = null
 
     private var downTime = 0L
     private var downX = 0f
@@ -32,8 +32,7 @@ class IslandRootLayout @JvmOverloads constructor(
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        val isLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
-        onOrientationChanged?.invoke(isLandscape)
+        onOrientationChanged?.invoke()
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
