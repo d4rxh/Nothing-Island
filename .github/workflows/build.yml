@@ -57,7 +57,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          name: Nothing Island ${{ github.ref_name }} (Complete dynamicSpot Parity: Interactive Touch Seekbar, Action Pills, Volume HUD, Outside-Touch Collapse & DND)
+          name: "Nothing Island ${{ github.ref_name }} (Complete dynamicSpot Parity - Interactive Touch Seekbar, Action Pills, Volume HUD, Outside-Touch Collapse & DND)"
           tag_name: ${{ github.ref_name }}
           files: build-output/Nothing-Island-*.apk
           draft: false
