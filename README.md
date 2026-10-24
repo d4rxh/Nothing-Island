@@ -116,8 +116,8 @@ Nothing Island is built with a zero-trust, privacy-first architecture:
 
 Signed production APKs are available on GitHub Releases:
 
-- **Latest Release**: [Nothing Island v1.0.17](https://github.com/d4rxh/Nothing-Island/releases/tag/v1.0.21)
-- **Direct APK**: [Nothing-Island-v1.0.17.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.21/Nothing-Island-v1.0.21.apk)
+- **Latest Release**: [Nothing Island v1.0.21](https://github.com/d4rxh/Nothing-Island/releases/tag/v1.0.21)
+- **Direct APK**: [Nothing-Island-v1.0.21.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.21/Nothing-Island-v1.0.21.apk)
 
 ### Required Permissions
 - **Display over other apps**: Needed to render the floating punch-hole capsule.
