@@ -1,4 +1,4 @@
-# (NOT) ISLAND // (01)
+# (NOT) ISLAND
 ### System-Wide Dynamic Overlay Engine for Nothing OS 3.0 & Modern Android
 
 <p align="center">
