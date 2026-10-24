@@ -8,7 +8,8 @@
         android:id="@+id/islandContainerRow"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
+        android:layout_gravity="center_horizontal|top"
+        android:gravity="center"
         android:orientation="horizontal">
 
         <!-- The Morphing Island Capsule Container -->
@@ -195,7 +196,7 @@
                             android:ellipsize="end"
                             android:maxLines="1"
                             android:text="ARTIST"
-                            android:textColor="@color/nothing_gray_light"
+                            android:textColor="@color/nothing_text_secondary"
                             android:textSize="11sp" />
                     </LinearLayout>
 

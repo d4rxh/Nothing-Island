@@ -8,5 +8,6 @@
     <color name="nothing_white">#FFFFFF</color>
     <color name="nothing_red">#D71920</color>
     <color name="nothing_text_secondary">#8E8E8E</color>
+    <color name="nothing_gray_light">#8E8E8E</color>
     <color name="nothing_text_muted">#555555</color>
 </resources>

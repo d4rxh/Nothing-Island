@@ -256,55 +256,54 @@ object IslandOverlayManager {
             cutout?.boundingRects
         } else null
 
-        val metrics = context.resources.displayMetrics
-        val screenWidth = metrics.widthPixels
-        val screenHeight = metrics.heightPixels
+        val isLandscape = rotation == Surface.ROTATION_90 || rotation == Surface.ROTATION_270
 
-        if (bounds != null && bounds.isNotEmpty()) {
-            val rect = bounds[0]
-            val cx = rect.centerX()
-            val cy = rect.centerY()
-
-            if (rect.left <= 25 || cx < screenWidth / 3) {
-                // Cutout is on the LEFT edge (Landscape ROTATION_90)
+        if (isLandscape) {
+            if (rotation == Surface.ROTATION_90) {
+                // Landscape gaming mode: camera notch on the LEFT edge
                 params.gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                params.x = if (prefs.attachToTop) 0 else rect.left
-                params.y = cy - (screenHeight / 2) + targetX
-            } else if (rect.right >= screenWidth - 25 || cx > (2 * screenWidth) / 3) {
-                // Cutout is on the RIGHT edge (Landscape ROTATION_270)
-                params.gravity = Gravity.END or Gravity.CENTER_VERTICAL
-                params.x = if (prefs.attachToTop) 0 else (screenWidth - rect.right)
-                params.y = cy - (screenHeight / 2) - targetX
+                params.x = targetY
+                params.y = targetX
             } else {
-                // Cutout is on the TOP edge (Portrait ROTATION_0)
-                params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                params.x = cx - (screenWidth / 2) + targetX
-                params.y = if (prefs.attachToTop) 0 else rect.top
+                // Reverse landscape: camera notch on the RIGHT edge
+                params.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                params.x = targetY
+                params.y = -targetX
+            }
+
+            // Vertically hug the camera punch-hole along the short edge (portrait-style along the notch)
+            islandContainerRow?.orientation = LinearLayout.VERTICAL
+            islandCapsule?.layoutParams?.width = dpToPx(context, 38)
+            islandCapsule?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            compactContainer?.orientation = LinearLayout.VERTICAL
+            compactContainer?.layoutParams?.width = dpToPx(context, 38)
+            compactContainer?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            compactContainer?.setPadding(dpToPx(context, 4), dpToPx(context, 8), dpToPx(context, 4), dpToPx(context, 8))
+            islandSubCapsule?.layoutParams?.let { lp ->
+                if (lp is ViewGroup.MarginLayoutParams) {
+                    lp.topMargin = dpToPx(context, 6)
+                    lp.marginStart = 0
+                }
             }
         } else {
-            when (rotation) {
-                Surface.ROTATION_90 -> {
-                    // Landscape gaming mode: camera notch on the LEFT edge
-                    params.gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                    params.x = targetY
-                    params.y = targetX
-                }
-                Surface.ROTATION_270 -> {
-                    // Reverse landscape: camera notch on the RIGHT edge
-                    params.gravity = Gravity.END or Gravity.CENTER_VERTICAL
-                    params.x = targetY
-                    params.y = -targetX
-                }
-                Surface.ROTATION_180 -> {
-                    params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                    params.x = -targetX
-                    params.y = targetY
-                }
-                else -> {
-                    // Standard portrait: camera notch on TOP
-                    params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                    params.x = targetX
-                    params.y = targetY
+            // Standard portrait: camera notch on TOP CENTER
+            params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            // Pure center alignment (offset only by user setting prefs.xOffset)
+            params.x = targetX
+            params.y = if (prefs.attachToTop) 0 else if (bounds != null && bounds.isNotEmpty()) bounds[0].top else targetY
+
+            // Horizontally hug the camera punch-hole along the top edge
+            islandContainerRow?.orientation = LinearLayout.HORIZONTAL
+            islandCapsule?.layoutParams?.width = ViewGroup.LayoutParams.WRAP_CONTENT
+            islandCapsule?.layoutParams?.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            compactContainer?.orientation = LinearLayout.HORIZONTAL
+            compactContainer?.layoutParams?.width = ViewGroup.LayoutParams.WRAP_CONTENT
+            compactContainer?.layoutParams?.height = dpToPx(context, 38)
+            compactContainer?.setPadding(dpToPx(context, 10), 0, dpToPx(context, 10), 0)
+            islandSubCapsule?.layoutParams?.let { lp ->
+                if (lp is ViewGroup.MarginLayoutParams) {
+                    lp.topMargin = 0
+                    lp.marginStart = dpToPx(context, 8)
                 }
             }
         }
@@ -611,6 +610,16 @@ object IslandOverlayManager {
         }
     }
 
+    private fun clearActiveNotification() {
+        hasActiveNotification = false
+        activeNotificationAppName = ""
+        activeNotificationTitle = ""
+        activeNotificationContent = ""
+        activeNotificationPackage = ""
+        activeNotificationIcon = null
+        activeNotificationPendingIntent = null
+    }
+
     private fun handleNotificationLaunch(context: Context) {
         notificationDismissRunnable?.let { mainHandler.removeCallbacks(it) }
         notificationDismissRunnable = null
@@ -619,8 +628,7 @@ object IslandOverlayManager {
         if (pendingIntent != null) {
             try {
                 pendingIntent.send()
-                hasActiveNotification = false
-                activeNotificationPendingIntent = null
+                clearActiveNotification()
                 collapseIsland()
                 return
             } catch (e: Exception) {
@@ -634,8 +642,7 @@ object IslandOverlayManager {
                 launchIntent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 if (launchIntent != null) {
                     context.startActivity(launchIntent)
-                    hasActiveNotification = false
-                    activeNotificationPendingIntent = null
+                    clearActiveNotification()
                     collapseIsland()
                     return
                 }
@@ -644,7 +651,7 @@ object IslandOverlayManager {
             }
         }
 
-        hasActiveNotification = false
+        clearActiveNotification()
         collapseIsland()
     }
 
@@ -1034,8 +1041,7 @@ object IslandOverlayManager {
 
                 // Auto dismiss notification banner after 6.0 seconds and revert to music or charging
                 notificationDismissRunnable = Runnable {
-                    hasActiveNotification = false
-                    activeNotificationPendingIntent = null
+                    clearActiveNotification()
                     dismissNotificationAndRestore()
                 }
                 mainHandler.postDelayed(notificationDismissRunnable!!, 6000)
@@ -1046,11 +1052,7 @@ object IslandOverlayManager {
     }
 
     fun onNotificationDismissed() {
-        hasActiveNotification = false
-        activeNotificationTitle = ""
-        activeNotificationContent = ""
-        activeNotificationPackage = ""
-        activeNotificationPendingIntent = null
+        clearActiveNotification()
         mainHandler.post {
             dismissNotificationAndRestore()
         }
@@ -1156,12 +1158,9 @@ object IslandOverlayManager {
     }
 
     private fun restorePreviousMediaOrIdle() {
-        if (currentTrackTitle.isNotEmpty()) {
-            if (isMusicPlaying) {
-                restoreMusicCompactState(isPlaying = true)
-            } else {
-                restoreMusicCompactState(isPlaying = false)
-            }
+        clearActiveNotification()
+        if (currentTrackTitle.isNotEmpty() && (isMusicPlaying || pausedTimeoutRunnable != null)) {
+            restoreMusicCompactState(isPlaying = isMusicPlaying)
         } else if (isDeviceCharging) {
             displayChargingCompact()
         } else if (currentCricketScore.isNotEmpty()) {
@@ -1175,6 +1174,7 @@ object IslandOverlayManager {
         val context = appContext ?: return
         val prefs = IslandPreferences(context)
 
+        compactLeftIcon?.clearColorFilter()
         if (currentArtwork != null) {
             compactLeftIcon?.setImageBitmap(currentArtwork)
         } else if (currentAppIcon != null) {
@@ -1263,6 +1263,7 @@ object IslandOverlayManager {
                     compactContainer?.visibility = View.VISIBLE
                     expandedContainer?.visibility = View.GONE
 
+                    compactLeftIcon?.clearColorFilter()
                     compactLeftIcon?.setImageResource(R.drawable.ic_dot)
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
@@ -1281,6 +1282,7 @@ object IslandOverlayManager {
                 State.MUSIC_COMPACT -> {
                     compactContainer?.visibility = View.VISIBLE
                     expandedContainer?.visibility = View.GONE
+                    compactLeftIcon?.clearColorFilter()
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
                     centerCutoutSpacer?.visibility = View.VISIBLE
@@ -1294,6 +1296,7 @@ object IslandOverlayManager {
                 State.MUSIC_PAUSED_COMPACT -> {
                     compactContainer?.visibility = View.VISIBLE
                     expandedContainer?.visibility = View.GONE
+                    compactLeftIcon?.clearColorFilter()
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
                     centerCutoutSpacer?.visibility = View.VISIBLE
@@ -1308,6 +1311,7 @@ object IslandOverlayManager {
                     compactContainer?.visibility = View.VISIBLE
                     expandedContainer?.visibility = View.GONE
                     compactLeftIcon?.setImageResource(R.drawable.ic_bolt)
+                    compactLeftIcon?.setColorFilter(Color.parseColor("#00E676"))
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
                     centerCutoutSpacer?.visibility = View.VISIBLE
@@ -1322,6 +1326,7 @@ object IslandOverlayManager {
                 State.NOTIFICATION_COMPACT -> {
                     compactContainer?.visibility = View.VISIBLE
                     expandedContainer?.visibility = View.GONE
+                    compactLeftIcon?.clearColorFilter()
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
                     centerCutoutSpacer?.visibility = View.VISIBLE
@@ -1336,6 +1341,7 @@ object IslandOverlayManager {
                 State.CRICKET_COMPACT -> {
                     compactContainer?.visibility = View.VISIBLE
                     expandedContainer?.visibility = View.GONE
+                    compactLeftIcon?.clearColorFilter()
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
                     centerCutoutSpacer?.visibility = View.VISIBLE
