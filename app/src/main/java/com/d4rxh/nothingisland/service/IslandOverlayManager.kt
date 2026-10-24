@@ -10,6 +10,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.transition.ChangeBounds
 import android.transition.TransitionManager
@@ -17,10 +18,12 @@ import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.animation.OvershootInterpolator
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -30,6 +33,8 @@ import com.d4rxh.nothingisland.data.IslandPreferences
 import com.d4rxh.nothingisland.helpers.NothingHapticHelper
 import com.d4rxh.nothingisland.helpers.TypefaceHelper
 import com.d4rxh.nothingisland.ui.DotMatrixEqualizerView
+import com.d4rxh.nothingisland.ui.LockscreenOverlayActivity
+import kotlin.math.abs
 
 object IslandOverlayManager {
 
@@ -45,15 +50,19 @@ object IslandOverlayManager {
     private var isAttached = false
 
     // UI references
+    private var islandRoot: FrameLayout? = null
     private var islandCapsule: LinearLayout? = null
     private var compactContainer: LinearLayout? = null
+    private var compactLeftContainer: FrameLayout? = null
     private var compactLeftIcon: ImageView? = null
     private var compactLeftText: TextView? = null
     private var centerCutoutSpacer: View? = null
+    private var compactRightContainer: LinearLayout? = null
     private var compactRightText: TextView? = null
     private var compactEqualizer: DotMatrixEqualizerView? = null
 
     private var expandedContainer: LinearLayout? = null
+    private var expandedHeaderRow: LinearLayout? = null
     private var expandedAppIcon: ImageView? = null
     private var expandedSourceAppText: TextView? = null
     private var expandedArtwork: ImageView? = null
@@ -71,14 +80,35 @@ object IslandOverlayManager {
         MUSIC_COMPACT,
         CHARGING_COMPACT,
         NOTIFICATION_COMPACT,
+        CRICKET_COMPACT,
         EXPANDED
     }
 
     private var currentState: State = State.IDLE
+    private var previousCompactState: State = State.IDLE
+
+    // Media state persistence
     private var isMusicPlaying = false
     private var currentTrackTitle = ""
     private var currentArtistName = ""
     private var currentAppName = "SPOTIFY"
+    private var currentArtwork: Bitmap? = null
+    private var currentAppIcon: Drawable? = null
+
+    // Cricket state persistence
+    private var currentCricketMatch = ""
+    private var currentCricketScore = ""
+    private var currentCricketAppName = ""
+    private var currentCricketAppIcon: Drawable? = null
+
+    // Auto dismiss notification runnable
+    private var notificationDismissRunnable: Runnable? = null
+
+    // Touch event variables for 100% reliable tap-to-expand
+    private var touchDownTime = 0L
+    private var touchDownX = 0f
+    private var touchDownY = 0f
+    private var isTouchTracking = false
 
     fun showOverlay(context: Context) {
         appContext = context.applicationContext
@@ -110,22 +140,25 @@ object IslandOverlayManager {
         val wm = windowManager ?: return
         val prefs = IslandPreferences(context)
 
-        // Remove old view if any exists
         cleanOldView()
 
         val themedContext = ContextThemeWrapper(context, R.style.Theme_NOTIsland)
         val view = LayoutInflater.from(themedContext).inflate(R.layout.layout_island_overlay, null)
         overlayView = view
 
+        islandRoot = view.findViewById(R.id.islandRoot)
         islandCapsule = view.findViewById(R.id.islandCapsule)
         compactContainer = view.findViewById(R.id.compactContainer)
+        compactLeftContainer = view.findViewById(R.id.compactLeftContainer)
         compactLeftIcon = view.findViewById(R.id.compactLeftIcon)
         compactLeftText = view.findViewById(R.id.compactLeftText)
         centerCutoutSpacer = view.findViewById(R.id.centerCutoutSpacer)
+        compactRightContainer = view.findViewById(R.id.compactRightContainer)
         compactRightText = view.findViewById(R.id.compactRightText)
         compactEqualizer = view.findViewById(R.id.compactEqualizer)
 
         expandedContainer = view.findViewById(R.id.expandedContainer)
+        expandedHeaderRow = view.findViewById(R.id.expandedHeaderRow)
         expandedAppIcon = view.findViewById(R.id.expandedAppIcon)
         expandedSourceAppText = view.findViewById(R.id.expandedSourceAppText)
         expandedArtwork = view.findViewById(R.id.expandedArtwork)
@@ -143,6 +176,10 @@ object IslandOverlayManager {
         expandedSourceAppText?.let { TypefaceHelper.applyNdot(it) }
         expandedTitleText?.let { TypefaceHelper.applyNdot(it) }
 
+        // Enable marquee scrolling on texts
+        compactRightText?.isSelected = true
+        expandedTitleText?.isSelected = true
+
         applyCustomStyling(context)
         setupInteractions(context)
 
@@ -153,8 +190,7 @@ object IslandOverlayManager {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-        // FLAG_SHOW_WHEN_LOCKED ensures Dynamic Island is 100% visible on the Lock Screen!
-        // FLAG_LAYOUT_NO_LIMITS + FLAG_LAYOUT_IN_SCREEN ensures the window draws over status bar & cutout!
+        // FLAG_SHOW_WHEN_LOCKED + FLAG_LAYOUT_IN_SCREEN + FLAG_LAYOUT_NO_LIMITS
         val windowFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
@@ -184,7 +220,7 @@ object IslandOverlayManager {
             wm.addView(view, params)
             isAttached = true
             applyStateVisibilities(State.IDLE)
-            Log.i(TAG, "Dynamic Island overlay attached successfully to WindowManager at (x=${params.x}, y=${params.y})")
+            Log.i(TAG, "Dynamic Island overlay attached successfully at (x=${params.x}, y=${params.y})")
         } catch (e: Exception) {
             Log.e(TAG, "Fatal error adding overlay view: ${e.message}", e)
             isAttached = false
@@ -215,9 +251,10 @@ object IslandOverlayManager {
             val bgDrawable = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 setColor(Color.BLACK)
-                setStroke(dpToPx(context, 1.5f), Color.parseColor("#555555"))
+                setStroke(dpToPx(context, 1.2f), Color.parseColor("#444444"))
                 if (prefs.attachToTop) {
-                    // iPhone attached notch style: flat top, rounded bottom corners
+                    // Apple-style attached to top bezel:
+                    // Flat top edge flush with bezel, rounded bottom corners
                     cornerRadii = floatArrayOf(
                         0f, 0f,             // Top-left
                         0f, 0f,             // Top-right
@@ -230,12 +267,23 @@ object IslandOverlayManager {
             }
             capsule.background = bgDrawable
 
+            // If attached to top, add top padding and extend height to cover bezel seamlessly
+            val extraHeight = if (prefs.attachToTop) dpToPx(context, 6) else 0
+            val topPadding = if (prefs.attachToTop) dpToPx(context, 4) else 0
+
+            compactContainer?.setPadding(
+                dpToPx(context, 10),
+                topPadding,
+                dpToPx(context, 10),
+                0
+            )
+
             compactContainer?.layoutParams = compactContainer?.layoutParams?.apply {
-                height = dpToPx(context, prefs.islandHeight)
+                height = dpToPx(context, prefs.islandHeight) + extraHeight
             }
 
             // Normal idle width
-            if (currentState != State.EXPANDED && currentState != State.MUSIC_COMPACT) {
+            if (currentState != State.EXPANDED && currentState != State.MUSIC_COMPACT && currentState != State.CRICKET_COMPACT) {
                 capsule.minimumWidth = dpToPx(context, prefs.islandWidth)
             }
 
@@ -248,34 +296,57 @@ object IslandOverlayManager {
         }
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     private fun setupInteractions(context: Context) {
         val prefs = IslandPreferences(context)
 
-        // Robust click handler that works on any part of the compact capsule
-        val toggleClickListener = View.OnClickListener {
-            if (prefs.hapticsEnabled) {
-                NothingHapticHelper.vibrateTick(it)
-            }
-            if (currentState == State.EXPANDED) {
-                collapseIsland()
-            } else {
-                expandIsland()
+        // Resilient OnTouchListener:
+        // Handles both ACTION_UP and ACTION_CANCEL (cancels occur when status-bar shade begins gesture)
+        val islandTouchListener = View.OnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    touchDownTime = SystemClock.uptimeMillis()
+                    touchDownX = event.rawX
+                    touchDownY = event.rawY
+                    isTouchTracking = true
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isTouchTracking) {
+                        isTouchTracking = false
+                        val duration = SystemClock.uptimeMillis() - touchDownTime
+                        val dx = abs(event.rawX - touchDownX)
+                        val dy = abs(event.rawY - touchDownY)
+                        val density = view.resources.displayMetrics.density
+                        val maxTapDelta = 35 * density
+
+                        if (duration < 500 && dx < maxTapDelta && dy < maxTapDelta) {
+                            if (prefs.hapticsEnabled) {
+                                NothingHapticHelper.vibratePop(view.context)
+                            }
+                            handleIslandTap()
+                            return@OnTouchListener true
+                        }
+                    }
+                    false
+                }
+                else -> false
             }
         }
 
-        islandCapsule?.setOnClickListener(toggleClickListener)
-        compactContainer?.setOnClickListener(toggleClickListener)
-        overlayView?.setOnClickListener(toggleClickListener)
+        islandCapsule?.setOnTouchListener(islandTouchListener)
+        compactContainer?.setOnTouchListener(islandTouchListener)
+        overlayView?.setOnTouchListener(islandTouchListener)
 
-        // Tap to collapse listeners when expanded
-        val collapseListener = View.OnClickListener {
+        // Tapping expanded header or collapse pill collapses the island
+        val collapseClickListener = View.OnClickListener {
             if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
             collapseIsland()
         }
+        expandedHeaderRow?.setOnClickListener(collapseClickListener)
+        expandedArtwork?.setOnClickListener(collapseClickListener)
 
-        overlayView?.findViewById<View>(R.id.expandedSourceAppText)?.setOnClickListener(collapseListener)
-        overlayView?.findViewById<View>(R.id.expandedAppIcon)?.setOnClickListener(collapseListener)
-
+        // Media controls in expanded state
         btnPlayPause?.setOnClickListener {
             if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(it.context)
             IslandMediaManager.togglePlayPause()
@@ -289,6 +360,14 @@ object IslandOverlayManager {
         btnNext?.setOnClickListener {
             if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
             IslandMediaManager.skipNext()
+        }
+    }
+
+    private fun handleIslandTap() {
+        if (currentState == State.EXPANDED) {
+            collapseIsland()
+        } else {
+            expandIsland()
         }
     }
 
@@ -335,12 +414,15 @@ object IslandOverlayManager {
         currentArtistName = artist
         currentAppName = appName
         isMusicPlaying = isPlaying
+        currentArtwork = artwork
+        currentAppIcon = appIcon
 
         mainHandler.post {
             try {
                 if (title.isNotEmpty() && isPlaying) {
-                    // Compact Island around punch-hole:
-                    // Left: Real Album Cover or real App Icon (Spotify green logo)
+                    previousCompactState = State.MUSIC_COMPACT
+
+                    // 1. Setup Compact Island (Locked 24x24dp Container)
                     if (artwork != null) {
                         compactLeftIcon?.setImageBitmap(artwork)
                     } else if (appIcon != null) {
@@ -351,18 +433,20 @@ object IslandOverlayManager {
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
 
-                    // Right: Song Title + Live dancing 4-column Nothing Red equalizer
-                    compactRightText?.text = title.take(16)
+                    // Stable song title with marquee scrolling
+                    compactRightText?.text = title
                     compactRightText?.setTextColor(Color.WHITE)
+                    compactRightText?.isSelected = true
                     compactRightText?.visibility = View.VISIBLE
 
                     compactEqualizer?.visibility = View.VISIBLE
                     compactEqualizer?.isPlaying = true
 
-                    // Gracefully expand width so music island never shrinks
-                    islandCapsule?.minimumWidth = dpToPx(context, maxOf(prefs.islandWidth, 185))
+                    // Rock-Solid Fixed Music Width (prevents shrinking or jumping)
+                    val stableMusicWidth = dpToPx(context, maxOf(prefs.islandWidth, 215))
+                    islandCapsule?.minimumWidth = stableMusicWidth
 
-                    // Expanded Card:
+                    // 2. Setup Expanded Media Card
                     if (appIcon != null) {
                         expandedAppIcon?.setImageDrawable(appIcon)
                     } else {
@@ -377,7 +461,8 @@ object IslandOverlayManager {
                         expandedArtwork?.setImageDrawable(appIcon)
                         expandedArtwork?.visibility = View.VISIBLE
                     } else {
-                        expandedArtwork?.visibility = View.GONE
+                        expandedArtwork?.setImageResource(R.drawable.ic_music)
+                        expandedArtwork?.visibility = View.VISIBLE
                     }
 
                     expandedTitleText?.text = title
@@ -387,7 +472,8 @@ object IslandOverlayManager {
                     btnPlayPause?.setImageResource(R.drawable.ic_pause)
                     expandedEqualizer?.isPlaying = true
 
-                    if (currentState != State.EXPANDED) {
+                    // Don't interrupt if notification or expanded is showing
+                    if (currentState != State.EXPANDED && currentState != State.NOTIFICATION_COMPACT) {
                         updateState(State.MUSIC_COMPACT)
                     }
                 } else if (!isPlaying && currentState == State.MUSIC_COMPACT) {
@@ -422,11 +508,11 @@ object IslandOverlayManager {
 
                     updateState(State.CHARGING_COMPACT)
 
-                    // Auto collapse back to IDLE or MUSIC after 5 seconds
+                    // Auto revert back to MUSIC or IDLE after 5 seconds
                     mainHandler.postDelayed({
                         if (currentState == State.CHARGING_COMPACT) {
-                            if (isMusicPlaying) {
-                                updateState(State.MUSIC_COMPACT)
+                            if (isMusicPlaying && currentTrackTitle.isNotEmpty()) {
+                                restoreMusicCompactState()
                             } else {
                                 updateState(State.IDLE)
                             }
@@ -434,8 +520,8 @@ object IslandOverlayManager {
                     }, 5000)
                 } else {
                     if (currentState == State.CHARGING_COMPACT) {
-                        if (isMusicPlaying) {
-                            updateState(State.MUSIC_COMPACT)
+                        if (isMusicPlaying && currentTrackTitle.isNotEmpty()) {
+                            restoreMusicCompactState()
                         } else {
                             updateState(State.IDLE)
                         }
@@ -459,7 +545,10 @@ object IslandOverlayManager {
 
         mainHandler.post {
             try {
-                // Compact Island shows sender app icon (WhatsApp, Telegram, etc.)
+                // Remove any pending auto-dismiss
+                notificationDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+
+                // 1. Compact View: App Icon + Notification Title
                 if (appIcon != null) {
                     compactLeftIcon?.setImageDrawable(appIcon)
                 } else {
@@ -468,11 +557,15 @@ object IslandOverlayManager {
                 compactLeftIcon?.visibility = View.VISIBLE
                 compactLeftText?.visibility = View.GONE
 
-                compactRightText?.text = title.take(16)
+                compactRightText?.text = title
+                compactRightText?.isSelected = true
                 compactRightText?.visibility = View.VISIBLE
                 compactEqualizer?.visibility = View.GONE
 
-                // Expanded Card
+                // Fixed elegant notification width
+                islandCapsule?.minimumWidth = dpToPx(context, maxOf(prefs.islandWidth, 200))
+
+                // 2. Expanded View
                 if (appIcon != null) {
                     expandedAppIcon?.setImageDrawable(appIcon)
                     expandedArtwork?.setImageDrawable(appIcon)
@@ -491,20 +584,166 @@ object IslandOverlayManager {
 
                 updateState(State.NOTIFICATION_COMPACT)
 
-                // Auto dismiss notification banner after 4.5 seconds
-                mainHandler.postDelayed({
-                    if (currentState == State.NOTIFICATION_COMPACT) {
-                        if (isMusicPlaying) {
-                            updateState(State.MUSIC_COMPACT)
-                        } else {
-                            updateState(State.IDLE)
-                        }
-                    }
-                }, 4500)
+                // Auto dismiss notification banner after exactly 4.0 seconds and revert to music
+                notificationDismissRunnable = Runnable {
+                    dismissNotificationAndRestore()
+                }
+                mainHandler.postDelayed(notificationDismissRunnable!!, 4000)
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onNotificationReceived: ${e.message}", e)
             }
         }
+    }
+
+    fun onNotificationDismissed() {
+        mainHandler.post {
+            dismissNotificationAndRestore()
+        }
+    }
+
+    private fun dismissNotificationAndRestore() {
+        notificationDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+        notificationDismissRunnable = null
+
+        if (currentState == State.NOTIFICATION_COMPACT) {
+            if (isMusicPlaying && currentTrackTitle.isNotEmpty()) {
+                restoreMusicCompactState()
+            } else if (currentCricketScore.isNotEmpty()) {
+                restoreCricketCompactState()
+            } else {
+                updateState(State.IDLE)
+            }
+        }
+    }
+
+    fun onCricketScoreReceived(
+        appName: String,
+        matchTitle: String,
+        scoreText: String,
+        appIcon: Drawable?
+    ) {
+        val context = appContext ?: return
+        val prefs = IslandPreferences(context)
+
+        currentCricketMatch = matchTitle
+        currentCricketScore = scoreText
+        currentCricketAppName = appName
+        currentCricketAppIcon = appIcon
+
+        mainHandler.post {
+            try {
+                if (currentState != State.NOTIFICATION_COMPACT && currentState != State.EXPANDED) {
+                    // If music is playing, flash score for 5s then revert to music
+                    displayCricketCompact()
+
+                    if (isMusicPlaying && currentTrackTitle.isNotEmpty()) {
+                        mainHandler.postDelayed({
+                            if (currentState == State.CRICKET_COMPACT && isMusicPlaying) {
+                                restoreMusicCompactState()
+                            }
+                        }, 5000)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in onCricketScoreReceived: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun displayCricketCompact() {
+        val context = appContext ?: return
+        val prefs = IslandPreferences(context)
+
+        if (currentCricketAppIcon != null) {
+            compactLeftIcon?.setImageDrawable(currentCricketAppIcon)
+        } else {
+            compactLeftIcon?.setImageResource(R.drawable.ic_cricket)
+        }
+        compactLeftIcon?.visibility = View.VISIBLE
+        compactLeftText?.visibility = View.GONE
+
+        compactRightText?.text = currentCricketScore
+        compactRightText?.setTextColor(Color.WHITE)
+        compactRightText?.isSelected = true
+        compactRightText?.visibility = View.VISIBLE
+        compactEqualizer?.visibility = View.GONE
+
+        islandCapsule?.minimumWidth = dpToPx(context, maxOf(prefs.islandWidth, 215))
+
+        // Expanded view for cricket
+        if (currentCricketAppIcon != null) {
+            expandedAppIcon?.setImageDrawable(currentCricketAppIcon)
+            expandedArtwork?.setImageDrawable(currentCricketAppIcon)
+            expandedArtwork?.visibility = View.VISIBLE
+        } else {
+            expandedAppIcon?.setImageResource(R.drawable.ic_cricket)
+            expandedArtwork?.setImageResource(R.drawable.ic_cricket)
+            expandedArtwork?.visibility = View.VISIBLE
+        }
+
+        expandedSourceAppText?.text = "LIVE CRICKET - ${currentCricketAppName.uppercase()}"
+        expandedTitleText?.text = currentCricketMatch
+        expandedArtistText?.text = currentCricketScore
+        mediaControlsRow?.visibility = View.GONE
+        expandedNotificationBody?.visibility = View.VISIBLE
+        expandedNotificationBody?.text = "$currentCricketMatch\n$currentCricketScore"
+
+        updateState(State.CRICKET_COMPACT)
+    }
+
+    private fun restoreCricketCompactState() {
+        displayCricketCompact()
+    }
+
+    private fun restoreMusicCompactState() {
+        val context = appContext ?: return
+        val prefs = IslandPreferences(context)
+
+        if (currentArtwork != null) {
+            compactLeftIcon?.setImageBitmap(currentArtwork)
+        } else if (currentAppIcon != null) {
+            compactLeftIcon?.setImageDrawable(currentAppIcon)
+        } else {
+            compactLeftIcon?.setImageResource(R.drawable.ic_music)
+        }
+        compactLeftIcon?.visibility = View.VISIBLE
+        compactLeftText?.visibility = View.GONE
+
+        compactRightText?.text = currentTrackTitle
+        compactRightText?.setTextColor(Color.WHITE)
+        compactRightText?.isSelected = true
+        compactRightText?.visibility = View.VISIBLE
+
+        compactEqualizer?.visibility = View.VISIBLE
+        compactEqualizer?.isPlaying = isMusicPlaying
+
+        val stableMusicWidth = dpToPx(context, maxOf(prefs.islandWidth, 215))
+        islandCapsule?.minimumWidth = stableMusicWidth
+
+        // Restore expanded media view
+        if (currentAppIcon != null) {
+            expandedAppIcon?.setImageDrawable(currentAppIcon)
+        } else {
+            expandedAppIcon?.setImageResource(R.drawable.ic_music)
+        }
+        expandedSourceAppText?.text = currentAppName.uppercase()
+
+        if (currentArtwork != null) {
+            expandedArtwork?.setImageBitmap(currentArtwork)
+            expandedArtwork?.visibility = View.VISIBLE
+        } else if (currentAppIcon != null) {
+            expandedArtwork?.setImageDrawable(currentAppIcon)
+            expandedArtwork?.visibility = View.VISIBLE
+        }
+
+        expandedTitleText?.text = currentTrackTitle
+        expandedArtistText?.text = currentArtistName
+        mediaControlsRow?.visibility = View.VISIBLE
+        expandedNotificationBody?.visibility = View.GONE
+        btnPlayPause?.setImageResource(if (isMusicPlaying) R.drawable.ic_pause else R.drawable.ic_play)
+        expandedEqualizer?.isPlaying = isMusicPlaying
+
+        updateState(State.MUSIC_COMPACT)
     }
 
     private fun updateState(newState: State) {
@@ -520,8 +759,8 @@ object IslandOverlayManager {
                     TransitionManager.beginDelayedTransition(
                         capsule as ViewGroup,
                         ChangeBounds().apply {
-                            duration = 220
-                            interpolator = OvershootInterpolator(0.8f)
+                            duration = 200
+                            interpolator = OvershootInterpolator(0.7f)
                         }
                     )
                 } catch (e: Exception) {
@@ -530,11 +769,24 @@ object IslandOverlayManager {
 
                 applyStateVisibilities(newState)
 
-                // Force WindowManager to relayout and expand surface buffer
+                // Force WindowManager to relayout
                 layoutParams?.let { params ->
                     windowManager?.updateViewLayout(view, params)
                 }
                 view.requestLayout()
+
+                // Sync lock screen if active
+                LockscreenOverlayActivity.instance?.syncState(
+                    state = newState,
+                    trackTitle = currentTrackTitle,
+                    artistName = currentArtistName,
+                    appName = currentAppName,
+                    isPlaying = isMusicPlaying,
+                    artwork = currentArtwork,
+                    appIcon = currentAppIcon,
+                    cricketMatch = currentCricketMatch,
+                    cricketScore = currentCricketScore
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Error in updateState: ${e.message}", e)
             }
@@ -542,16 +794,16 @@ object IslandOverlayManager {
     }
 
     private fun applyStateVisibilities(state: State) {
+        val context = appContext ?: return
+        val prefs = IslandPreferences(context)
+
         try {
             when (state) {
                 State.IDLE -> {
-                    // Always-On-Screen Standby mode:
-                    // Framing camera cutout with iconic Nothing Red LED dot + NOTHING typography
                     compactContainer?.visibility = View.VISIBLE
                     expandedContainer?.visibility = View.GONE
 
                     compactLeftIcon?.setImageResource(R.drawable.ic_dot)
-                    compactLeftIcon?.background = null
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
 
@@ -561,6 +813,8 @@ object IslandOverlayManager {
                     compactRightText?.setTextColor(Color.WHITE)
                     compactRightText?.visibility = View.VISIBLE
                     compactEqualizer?.visibility = View.GONE
+
+                    islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
                 }
                 State.MUSIC_COMPACT -> {
                     compactContainer?.visibility = View.VISIBLE
@@ -570,6 +824,7 @@ object IslandOverlayManager {
                     centerCutoutSpacer?.visibility = View.VISIBLE
                     compactRightText?.visibility = View.VISIBLE
                     compactEqualizer?.visibility = View.VISIBLE
+                    islandCapsule?.minimumWidth = dpToPx(context, maxOf(prefs.islandWidth, 215))
                 }
                 State.CHARGING_COMPACT -> {
                     compactContainer?.visibility = View.VISIBLE
@@ -590,6 +845,17 @@ object IslandOverlayManager {
                     centerCutoutSpacer?.visibility = View.VISIBLE
                     compactRightText?.visibility = View.VISIBLE
                     compactEqualizer?.visibility = View.GONE
+                    islandCapsule?.minimumWidth = dpToPx(context, maxOf(prefs.islandWidth, 200))
+                }
+                State.CRICKET_COMPACT -> {
+                    compactContainer?.visibility = View.VISIBLE
+                    expandedContainer?.visibility = View.GONE
+                    compactLeftIcon?.visibility = View.VISIBLE
+                    compactLeftText?.visibility = View.GONE
+                    centerCutoutSpacer?.visibility = View.VISIBLE
+                    compactRightText?.visibility = View.VISIBLE
+                    compactEqualizer?.visibility = View.GONE
+                    islandCapsule?.minimumWidth = dpToPx(context, maxOf(prefs.islandWidth, 215))
                 }
                 State.EXPANDED -> {
                     compactContainer?.visibility = View.GONE
@@ -613,8 +879,10 @@ object IslandOverlayManager {
     }
 
     fun collapseIsland() {
-        if (isMusicPlaying) {
-            updateState(State.MUSIC_COMPACT)
+        if (isMusicPlaying && currentTrackTitle.isNotEmpty()) {
+            restoreMusicCompactState()
+        } else if (currentCricketScore.isNotEmpty()) {
+            restoreCricketCompactState()
         } else {
             updateState(State.IDLE)
         }

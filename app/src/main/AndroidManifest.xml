@@ -30,6 +30,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Lockscreen Overlay Activity (Guarantees Dynamic Island is 100% visible when device is locked) -->
+        <activity
+            android:name=".ui.LockscreenOverlayActivity"
+            android:exported="false"
+            android:theme="@style/Theme.NothingIsland.Lockscreen"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:inheritShowWhenLocked="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleInstance" />
+
         <!-- Floating Overlay Island Service (Android 14/15 Compliant 24/7 Foreground Service) -->
         <service
             android:name=".service.IslandOverlayService"

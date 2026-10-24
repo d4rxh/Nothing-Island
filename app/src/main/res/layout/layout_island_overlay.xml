@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/islandRoot"
     android:layout_width="wrap_content"
@@ -13,30 +12,43 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal|top"
         android:background="@drawable/bg_island_capsule"
+        android:clipChildren="true"
+        android:clipToOutline="true"
         android:clipToPadding="false"
         android:elevation="12dp"
+        android:focusable="false"
+        android:clickable="true"
         android:gravity="center_vertical"
         android:orientation="vertical">
 
-        <!-- 1. Compact Header Bar (Shown in compact states: Idle / Music / Charging / Notification) -->
+        <!-- 1. Compact Header Bar (Shown in compact states: Idle / Music / Charging / Notification / Cricket) -->
         <LinearLayout
             android:id="@+id/compactContainer"
             android:layout_width="wrap_content"
             android:layout_height="38dp"
+            android:clickable="true"
+            android:focusable="false"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp">
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp">
 
-            <!-- Compact Left Icon / Album Art -->
-            <ImageView
-                android:id="@+id/compactLeftIcon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:background="@drawable/bg_nothing_pill"
-                android:scaleType="centerCrop"
-                android:src="@drawable/ic_music"
-                android:visibility="gone" />
+            <!-- Compact Left Container for Icon / Album Art (Locked 24x24dp Container) -->
+            <FrameLayout
+                android:id="@+id/compactLeftContainer"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center_vertical"
+                android:clipChildren="true"
+                android:clipToOutline="true">
+
+                <ImageView
+                    android:id="@+id/compactLeftIcon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_music" />
+            </FrameLayout>
 
             <!-- Compact Left Text (e.g. Charging % or App Name) -->
             <TextView
@@ -56,32 +68,45 @@
                 android:layout_width="28dp"
                 android:layout_height="28dp" />
 
-            <!-- Compact Right Text (e.g. Title or Battery) -->
-            <TextView
-                android:id="@+id/compactRightText"
+            <!-- Compact Right Section (Title / Battery / Cricket Score + Equalizer) -->
+            <LinearLayout
+                android:id="@+id/compactRightContainer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="6dp"
-                android:ellipsize="end"
-                android:letterSpacing="0.08"
-                android:maxLines="1"
-                android:textColor="@color/nothing_white"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
+                android:gravity="center_vertical|end"
+                android:orientation="horizontal">
 
-            <!-- Compact Right Visualizer (Nothing Dot-Matrix Equalizer) -->
-            <com.d4rxh.nothingisland.ui.DotMatrixEqualizerView
-                android:id="@+id/compactEqualizer"
-                android:layout_width="20dp"
-                android:layout_height="16dp"
-                android:visibility="gone" />
+                <TextView
+                    android:id="@+id/compactRightText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="6dp"
+                    android:ellipsize="marquee"
+                    android:fadingEdge="horizontal"
+                    android:fadingEdgeLength="8dp"
+                    android:letterSpacing="0.08"
+                    android:marqueeRepeatLimit="marquee_forever"
+                    android:maxWidth="110dp"
+                    android:singleLine="true"
+                    android:textColor="@color/nothing_white"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <!-- Compact Right Visualizer (Nothing Dot-Matrix Equalizer) -->
+                <com.d4rxh.nothingisland.ui.DotMatrixEqualizerView
+                    android:id="@+id/compactEqualizer"
+                    android:layout_width="20dp"
+                    android:layout_height="16dp"
+                    android:visibility="gone" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- 2. Expanded Card View (Shown when user taps the Island) -->
         <LinearLayout
             android:id="@+id/expandedContainer"
-            android:layout_width="280dp"
+            android:layout_width="290dp"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingStart="16dp"
@@ -92,6 +117,7 @@
 
             <!-- Top Row: App Name & Close / Collapse Indicator -->
             <LinearLayout
+                android:id="@+id/expandedHeaderRow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
@@ -117,12 +143,13 @@
 
                 <!-- Tap to collapse indicator pill -->
                 <View
+                    android:id="@+id/expandedCollapsePill"
                     android:layout_width="28dp"
                     android:layout_height="3dp"
                     android:background="@drawable/bg_nothing_pill" />
             </LinearLayout>
 
-            <!-- Middle Row: Album Artwork + Title & Artist -->
+            <!-- Middle Row: Album Artwork / Sports Badge + Title & Artist -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -135,6 +162,7 @@
                     android:layout_width="54dp"
                     android:layout_height="54dp"
                     android:background="@drawable/bg_nothing_pill"
+                    android:clipToOutline="true"
                     android:scaleType="centerCrop"
                     android:src="@drawable/app_logo" />
 
@@ -163,7 +191,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:ellipsize="end"
-                        android:maxLines="1"
+                        android:maxLines="2"
                         android:text="Artist Name"
                         android:textColor="@color/nothing_text_secondary"
                         android:textSize="12sp" />
@@ -187,40 +215,41 @@
 
                 <ImageButton
                     android:id="@+id/btnPrev"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
                     android:background="?selectableItemBackgroundBorderless"
                     android:contentDescription="Previous"
-                    android:padding="8dp"
+                    android:padding="10dp"
                     android:src="@drawable/ic_skip_previous" />
 
                 <ImageButton
                     android:id="@+id/btnPlayPause"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
                     android:layout_marginStart="24dp"
                     android:layout_marginEnd="24dp"
                     android:background="@drawable/bg_red_pill"
                     android:contentDescription="Play/Pause"
-                    android:padding="10dp"
+                    android:padding="12dp"
                     android:src="@drawable/ic_pause" />
 
                 <ImageButton
                     android:id="@+id/btnNext"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
                     android:background="?selectableItemBackgroundBorderless"
                     android:contentDescription="Next"
-                    android:padding="8dp"
+                    android:padding="10dp"
                     android:src="@drawable/ic_skip_next" />
             </LinearLayout>
 
-            <!-- Notification Action / Reply Text (if notification state) -->
+            <!-- Notification / Cricket Commentary / Body Text -->
             <TextView
                 android:id="@+id/expandedNotificationBody"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="10dp"
+                android:lineSpacingExtra="3dp"
                 android:textColor="@color/nothing_white"
                 android:textSize="13sp"
                 android:visibility="gone" />

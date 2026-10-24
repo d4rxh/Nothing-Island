@@ -139,27 +139,91 @@ class IslandNotificationListener : NotificationListenerService() {
             val title = extras.getCharSequence("android.title")?.toString() ?: ""
             val text = extras.getCharSequence("android.text")?.toString() ?: ""
 
-            // Ignore ongoing media notifications to avoid duplicate triggers with MediaSession
-            if (title.isNotEmpty() && text.isNotEmpty() && !sbn.isOngoing) {
-                val appName = try {
-                    val pm = packageManager
-                    val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
-                    pm.getApplicationLabel(appInfo).toString()
-                } catch (e: Exception) {
-                    sbn.packageName
-                }
+            if (title.isEmpty() && text.isEmpty()) return
 
-                val appIcon: Drawable? = try {
-                    packageManager.getApplicationIcon(sbn.packageName)
-                } catch (e: Exception) {
-                    null
-                }
+            val pm = packageManager
+            val appName = try {
+                val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
+                pm.getApplicationLabel(appInfo).toString()
+            } catch (e: Exception) {
+                sbn.packageName
+            }
 
+            val appIcon: Drawable? = try {
+                pm.getApplicationIcon(sbn.packageName)
+            } catch (e: Exception) {
+                null
+            }
+
+            // Check if this is a live Cricket / Sports score notification
+            if (isCricketOrSportsNotification(sbn.packageName, title, text)) {
+                val scoreText = extractCricketScore(title, text)
+                IslandOverlayManager.onCricketScoreReceived(
+                    appName = appName,
+                    matchTitle = title,
+                    scoreText = scoreText,
+                    appIcon = appIcon
+                )
+                return
+            }
+
+            // Standard Notification (ignore ongoing notifications like foreground service sticky pins)
+            if (!sbn.isOngoing && title.isNotEmpty()) {
                 IslandOverlayManager.onNotificationReceived(appName, title, text, appIcon)
             }
         } catch (e: Exception) {
             Log.e("NotificationListener", "Error in onNotificationPosted: ${e.message}", e)
         }
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+        super.onNotificationRemoved(sbn)
+        try {
+            if (sbn == null || sbn.packageName == packageName) return
+            // When user dismisses notification from shade, restore music state immediately
+            IslandOverlayManager.onNotificationDismissed()
+        } catch (e: Exception) {
+            Log.e("NotificationListener", "Error in onNotificationRemoved: ${e.message}", e)
+        }
+    }
+
+    private fun isCricketOrSportsNotification(packageName: String, title: String, text: String): Boolean {
+        val sportsPackages = setOf(
+            "com.cricbuzz.android",
+            "com.google.android.googlequicksearchbox",
+            "in.startv.hotstar",
+            "com.jio.media.ondemand",
+            "com.jio.cinema",
+            "com.fancode",
+            "com.espncricinfo",
+            "org.crex.app",
+            "com.sportskeeda",
+            "com.onefootball.score"
+        )
+        val combined = "$title $text".lowercase()
+
+        if (sportsPackages.contains(packageName)) {
+            // Check if it looks like a score or match
+            val hasScoreIndicators = combined.contains(" vs ") || combined.contains(" v ") ||
+                    combined.contains("/") || combined.contains("ov") || combined.contains("run") ||
+                    combined.contains("inn") || combined.contains("target")
+            if (hasScoreIndicators) return true
+        }
+
+        // Generic pattern for sports notifications with cricket score pattern like "184/3" or "45/1"
+        val hasCricketKeywords = combined.contains("cricket") || combined.contains(" vs ") ||
+                combined.contains(" csk ") || combined.contains(" rcb ") || combined.contains(" mi ") ||
+                combined.contains(" ind ") || combined.contains(" aus ") || combined.contains(" eng ")
+        val hasScorePattern = Regex("""\d+/\d+|\d+-\d+""").containsMatchIn(combined)
+
+        return hasCricketKeywords && hasScorePattern
+    }
+
+    private fun extractCricketScore(title: String, text: String): String {
+        // Return score portion if available, e.g. "IND 184/3 (18.2 ov)"
+        val scoreRegex = Regex("""([A-Z]{2,4}\s+\d+/\d+.*|\d+/\d+\s*\(\d+\.?\d*\s*ov.*)""", RegexOption.IGNORE_CASE)
+        val match = scoreRegex.find(text) ?: scoreRegex.find(title)
+        return match?.value?.trim() ?: if (text.isNotEmpty()) text else title
     }
 
     override fun onDestroy() {

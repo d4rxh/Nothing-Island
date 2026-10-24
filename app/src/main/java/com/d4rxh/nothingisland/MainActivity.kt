@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnTestMusic: Button
     private lateinit var btnTestCharging: Button
     private lateinit var btnTestNotification: Button
+    private lateinit var btnTestCricket: Button
     private lateinit var btnForceShowIsland: Button
 
     // Permissions
@@ -127,6 +128,7 @@ class MainActivity : AppCompatActivity() {
         btnTestMusic = findViewById(R.id.btnTestMusic)
         btnTestCharging = findViewById(R.id.btnTestCharging)
         btnTestNotification = findViewById(R.id.btnTestNotification)
+        btnTestCricket = findViewById(R.id.btnTestCricket)
         btnForceShowIsland = findViewById(R.id.btnForceShowIsland)
 
         cardOverlayPermission = findViewById(R.id.cardOverlayPermission)
@@ -215,6 +217,11 @@ class MainActivity : AppCompatActivity() {
         btnTestNotification.setOnClickListener {
             NothingHapticHelper.vibrateTick(it)
             simulateNotificationIsland()
+        }
+
+        btnTestCricket.setOnClickListener {
+            NothingHapticHelper.vibrateTick(it)
+            simulateCricketIsland()
         }
 
         btnForceShowIsland.setOnClickListener {
@@ -370,22 +377,30 @@ class MainActivity : AppCompatActivity() {
     private fun updateSimulatedIslandAppearance() {
         val density = resources.displayMetrics.density
 
-        // Update corner radius
+        // Update corner radius (attached notch vs floating pill)
         val radiusPx = prefs.cornerRadius * density
         val bgDrawable = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             setColor(Color.BLACK)
-            setStroke((1.2f * density).toInt(), Color.parseColor("#262626"))
-            cornerRadius = radiusPx
+            setStroke((1.2f * density).toInt(), Color.parseColor("#333333"))
+            if (prefs.attachToTop) {
+                cornerRadii = floatArrayOf(
+                    0f, 0f, 0f, 0f,
+                    radiusPx, radiusPx,
+                    radiusPx, radiusPx
+                )
+            } else {
+                cornerRadius = radiusPx
+            }
         }
         simulatedIsland.background = bgDrawable
 
-        // Update dimensions
-        val lp = simulatedIsland.layoutParams as? LinearLayout.LayoutParams
-            ?: (simulatedIsland.layoutParams as? android.widget.FrameLayout.LayoutParams)
-
+        // Update dimensions & margins for Attached to Top Bezel
+        val lp = simulatedIsland.layoutParams as? android.widget.FrameLayout.LayoutParams
         if (lp != null) {
-            lp.height = (prefs.islandHeight * density).toInt()
+            val extraHeight = if (prefs.attachToTop) (6 * density).toInt() else 0
+            lp.height = (prefs.islandHeight * density).toInt() + extraHeight
+            lp.topMargin = if (prefs.attachToTop) 0 else (14 * density).toInt()
             simulatedIsland.layoutParams = lp
         }
         simulatedIsland.minimumWidth = (prefs.islandWidth * density).toInt()
@@ -523,7 +538,8 @@ class MainActivity : AppCompatActivity() {
         simLeftIcon.setImageResource(R.drawable.ic_music)
         simLeftIcon.visibility = View.VISIBLE
         simLeftText.visibility = View.GONE
-        simRightText.visibility = View.GONE
+        simRightText.text = "Starboy"
+        simRightText.visibility = View.VISIBLE
         simEqualizer.visibility = View.VISIBLE
         simEqualizer.isPlaying = true
 
@@ -566,8 +582,26 @@ class MainActivity : AppCompatActivity() {
         IslandOverlayManager.onNotificationReceived(
             appName = "WhatsApp",
             title = "Rahul",
-            content = "Bhai call uthana urgent hai!",
+            content = "Kahan ho bhai? Match start ho gaya!",
             appIcon = getDrawable(R.drawable.ic_bell)
+        )
+    }
+
+    private fun simulateCricketIsland() {
+        islandStateBadge.text = "CRICKET // LIVE"
+        simLeftIcon.setImageResource(R.drawable.ic_cricket)
+        simLeftIcon.visibility = View.VISIBLE
+        simEqualizer.visibility = View.GONE
+        simLeftText.visibility = View.GONE
+        simRightText.text = "IND 184/3 (18.2)"
+        simRightText.visibility = View.VISIBLE
+
+        // Real screen overlay test with Cricbuzz live cricket score
+        IslandOverlayManager.onCricketScoreReceived(
+            appName = "Cricbuzz",
+            matchTitle = "IND vs AUS",
+            scoreText = "IND 184/3 (18.2 ov)",
+            appIcon = getDrawable(R.drawable.ic_cricket)
         )
     }
 }
