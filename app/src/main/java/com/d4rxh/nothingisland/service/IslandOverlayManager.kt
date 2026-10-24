@@ -83,6 +83,11 @@ object IslandOverlayManager {
     private var btnNext: ImageButton? = null
     private var expandedNotificationBody: TextView? = null
 
+    // Split Pill (Dual Island) views
+    private var islandSubCapsule: LinearLayout? = null
+    private var subCapsuleIcon: ImageView? = null
+    private var subCapsuleText: TextView? = null
+
     enum class State {
         IDLE,
         MUSIC_COMPACT,
@@ -304,13 +309,8 @@ object IslandOverlayManager {
             }
         }
 
-        // Keep Dynamic Island aligned in its natural portrait orientation along the camera notch
-        when (rotation) {
-            Surface.ROTATION_90 -> islandCapsule?.rotation = 90f
-            Surface.ROTATION_270 -> islandCapsule?.rotation = 270f
-            Surface.ROTATION_180 -> islandCapsule?.rotation = 180f
-            else -> islandCapsule?.rotation = 0f
-        }
+        // Reset rotation so the capsule is never clipped or collapsed by WindowManager bounds
+        islandCapsule?.rotation = 0f
     }
 
     fun onOrientationChanged() {
@@ -396,6 +396,10 @@ object IslandOverlayManager {
         btnPlayPause = view.findViewById(R.id.btnPlayPause)
         btnNext = view.findViewById(R.id.btnNext)
         expandedNotificationBody = view.findViewById(R.id.expandedNotificationBody)
+
+        islandSubCapsule = view.findViewById(R.id.islandSubCapsule)
+        subCapsuleIcon = view.findViewById(R.id.subCapsuleIcon)
+        subCapsuleText = view.findViewById(R.id.subCapsuleText)
 
         // Apply authentic NDot font recursively to every text element in the island
         TypefaceHelper.applyNdotRecursively(view)
@@ -586,6 +590,12 @@ object IslandOverlayManager {
             if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
             IslandMediaManager.skipNext()
         }
+
+        // Split Secondary Capsule click expands battery status
+        islandSubCapsule?.setOnClickListener {
+            if (prefs.hapticsEnabled) overlayView?.let { v -> NothingHapticHelper.vibrateTick(v) }
+            expandIsland()
+        }
     }
 
     private fun handleExpandedCardClick(context: Context) {
@@ -712,6 +722,7 @@ object IslandOverlayManager {
             compactEqualizer?.visibility = View.GONE
             expandedEqualizer?.isPlaying = false
             btnPlayPause?.setImageResource(R.drawable.ic_play)
+            updateSplitPillState()
 
             if (currentState == State.MUSIC_COMPACT || currentState == State.MUSIC_PAUSED_COMPACT ||
                 (currentState == State.EXPANDED && !isDeviceCharging && currentCricketScore.isEmpty())
@@ -788,6 +799,7 @@ object IslandOverlayManager {
                         if (currentState != State.EXPANDED && currentState != State.NOTIFICATION_COMPACT) {
                             updateState(State.MUSIC_COMPACT)
                         }
+                        updateSplitPillState()
                     } else {
                         // PAUSED STATE: Show Play button and persist for 25s
                         compactEqualizer?.visibility = View.VISIBLE
@@ -800,6 +812,7 @@ object IslandOverlayManager {
                         if (currentState != State.EXPANDED && currentState != State.NOTIFICATION_COMPACT) {
                             updateState(State.MUSIC_PAUSED_COMPACT)
                         }
+                        updateSplitPillState()
 
                         // Graceful timeout: auto-collapse if paused without activity for 25 seconds
                         pausedTimeoutRunnable = Runnable {
@@ -845,18 +858,87 @@ object IslandOverlayManager {
                         NothingHapticHelper.vibratePop(context)
                     }
 
+                    // Dual Island Split Pill update!
+                    updateSplitPillState()
+
                     // If music is NOT playing and no notification, maintain CHARGING_COMPACT continuously!
                     if (!isMusicPlaying && !hasActiveNotification && currentState != State.EXPANDED) {
                         displayChargingCompact()
                     }
+
+                    if (isFirstConnect) {
+                        playChargingAnimation(batteryPercent)
+                    }
                 } else {
                     // Charger disconnected
+                    updateSplitPillState()
                     if (currentState == State.CHARGING_COMPACT) {
                         restorePreviousMediaOrIdle()
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onChargingChanged: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun updateSplitPillState() {
+        if (currentState != State.EXPANDED && isMusicPlaying && isDeviceCharging) {
+            islandSubCapsule?.visibility = View.VISIBLE
+            subCapsuleIcon?.setImageResource(R.drawable.ic_bolt)
+            subCapsuleIcon?.setColorFilter(Color.parseColor("#00E676"))
+            subCapsuleText?.text = "$currentBatteryPercent%"
+            subCapsuleText?.visibility = View.VISIBLE
+        } else {
+            islandSubCapsule?.visibility = View.GONE
+        }
+    }
+
+    private fun playChargingAnimation(batteryPercent: Int) {
+        val capsule = islandCapsule ?: return
+
+        // 1. Morphing scale bounce animation
+        capsule.animate()
+            .scaleX(1.08f)
+            .scaleY(1.08f)
+            .setDuration(220)
+            .setInterpolator(OvershootInterpolator(2.0f))
+            .withEndAction {
+                capsule.animate()
+                    .scaleX(1.0f)
+                    .scaleY(1.0f)
+                    .setDuration(180)
+                    .setInterpolator(android.view.animation.DecelerateInterpolator())
+                    .start()
+            }
+            .start()
+
+        // 2. Pulse bolt icon
+        compactLeftIcon?.let { icon ->
+            icon.setColorFilter(Color.parseColor("#00E676"))
+            icon.animate()
+                .scaleX(1.3f)
+                .scaleY(1.3f)
+                .setDuration(200)
+                .withEndAction {
+                    icon.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start()
+                }
+                .start()
+        }
+
+        // 3. Sub-capsule pop animation if split
+        islandSubCapsule?.let { sub ->
+            if (sub.visibility == View.VISIBLE) {
+                sub.scaleX = 0.5f
+                sub.scaleY = 0.5f
+                sub.alpha = 0f
+                sub.animate()
+                    .scaleX(1.0f)
+                    .scaleY(1.0f)
+                    .alpha(1.0f)
+                    .setDuration(250)
+                    .setInterpolator(OvershootInterpolator(1.5f))
+                    .start()
             }
         }
     }
@@ -1175,6 +1257,7 @@ object IslandOverlayManager {
         val prefs = IslandPreferences(context)
 
         try {
+            updateSplitPillState()
             when (state) {
                 State.IDLE -> {
                     compactContainer?.visibility = View.VISIBLE
