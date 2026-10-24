@@ -153,12 +153,15 @@ object IslandOverlayManager {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-        // Critical flags: FLAG_LAYOUT_NO_LIMITS + FLAG_LAYOUT_IN_SCREEN ensures the window
-        // extends past the status bar boundaries directly to the top edge over the camera cutout!
+        // FLAG_SHOW_WHEN_LOCKED ensures Dynamic Island is 100% visible on the Lock Screen!
+        // FLAG_LAYOUT_NO_LIMITS + FLAG_LAYOUT_IN_SCREEN ensures the window draws over status bar & cutout!
         val windowFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+
+        val targetY = if (prefs.attachToTop) 0 else dpToPx(context, prefs.yOffset)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -169,7 +172,7 @@ object IslandOverlayManager {
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             x = dpToPx(context, prefs.xOffset)
-            y = dpToPx(context, prefs.yOffset)
+            y = targetY
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -212,16 +215,29 @@ object IslandOverlayManager {
             val bgDrawable = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 setColor(Color.BLACK)
-                // Distinct high-contrast border so it is clearly visible on any wallpaper/status bar
                 setStroke(dpToPx(context, 1.5f), Color.parseColor("#555555"))
-                cornerRadius = radiusPx
+                if (prefs.attachToTop) {
+                    // iPhone attached notch style: flat top, rounded bottom corners
+                    cornerRadii = floatArrayOf(
+                        0f, 0f,             // Top-left
+                        0f, 0f,             // Top-right
+                        radiusPx, radiusPx, // Bottom-right
+                        radiusPx, radiusPx  // Bottom-left
+                    )
+                } else {
+                    cornerRadius = radiusPx
+                }
             }
             capsule.background = bgDrawable
 
             compactContainer?.layoutParams = compactContainer?.layoutParams?.apply {
                 height = dpToPx(context, prefs.islandHeight)
             }
-            capsule.minimumWidth = dpToPx(context, prefs.islandWidth)
+
+            // Normal idle width
+            if (currentState != State.EXPANDED && currentState != State.MUSIC_COMPACT) {
+                capsule.minimumWidth = dpToPx(context, prefs.islandWidth)
+            }
 
             centerCutoutSpacer?.layoutParams = centerCutoutSpacer?.layoutParams?.apply {
                 width = dpToPx(context, prefs.cutoutSize)
@@ -235,7 +251,8 @@ object IslandOverlayManager {
     private fun setupInteractions(context: Context) {
         val prefs = IslandPreferences(context)
 
-        islandCapsule?.setOnClickListener {
+        // Robust click handler that works on any part of the compact capsule
+        val toggleClickListener = View.OnClickListener {
             if (prefs.hapticsEnabled) {
                 NothingHapticHelper.vibrateTick(it)
             }
@@ -245,6 +262,19 @@ object IslandOverlayManager {
                 expandIsland()
             }
         }
+
+        islandCapsule?.setOnClickListener(toggleClickListener)
+        compactContainer?.setOnClickListener(toggleClickListener)
+        overlayView?.setOnClickListener(toggleClickListener)
+
+        // Tap to collapse listeners when expanded
+        val collapseListener = View.OnClickListener {
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(it)
+            collapseIsland()
+        }
+
+        overlayView?.findViewById<View>(R.id.expandedSourceAppText)?.setOnClickListener(collapseListener)
+        overlayView?.findViewById<View>(R.id.expandedAppIcon)?.setOnClickListener(collapseListener)
 
         btnPlayPause?.setOnClickListener {
             if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(it.context)
@@ -273,10 +303,11 @@ object IslandOverlayManager {
         val context = appContext ?: return
         val view = overlayView ?: return
         if (!isAttached) return
+        val prefs = IslandPreferences(context)
 
         layoutParams?.let { params ->
             params.x = dpToPx(context, xOffset)
-            params.y = dpToPx(context, yOffset)
+            params.y = if (prefs.attachToTop) 0 else dpToPx(context, yOffset)
             try {
                 windowManager?.updateViewLayout(view, params)
             } catch (e: Exception) {
@@ -320,10 +351,16 @@ object IslandOverlayManager {
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
 
-                    // Right: Live dancing 4-column Nothing Red equalizer
-                    compactRightText?.visibility = View.GONE
+                    // Right: Song Title + Live dancing 4-column Nothing Red equalizer
+                    compactRightText?.text = title.take(16)
+                    compactRightText?.setTextColor(Color.WHITE)
+                    compactRightText?.visibility = View.VISIBLE
+
                     compactEqualizer?.visibility = View.VISIBLE
                     compactEqualizer?.isPlaying = true
+
+                    // Gracefully expand width so music island never shrinks
+                    islandCapsule?.minimumWidth = dpToPx(context, maxOf(prefs.islandWidth, 185))
 
                     // Expanded Card:
                     if (appIcon != null) {
@@ -357,6 +394,7 @@ object IslandOverlayManager {
                     compactEqualizer?.isPlaying = false
                     expandedEqualizer?.isPlaying = false
                     btnPlayPause?.setImageResource(R.drawable.ic_play)
+                    islandCapsule?.minimumWidth = dpToPx(context, prefs.islandWidth)
                     updateState(State.IDLE)
                 }
             } catch (e: Exception) {
@@ -430,7 +468,7 @@ object IslandOverlayManager {
                 compactLeftIcon?.visibility = View.VISIBLE
                 compactLeftText?.visibility = View.GONE
 
-                compactRightText?.text = title
+                compactRightText?.text = title.take(16)
                 compactRightText?.visibility = View.VISIBLE
                 compactEqualizer?.visibility = View.GONE
 
@@ -472,25 +510,34 @@ object IslandOverlayManager {
     private fun updateState(newState: State) {
         currentState = newState
 
-        try {
-            val view = overlayView
-            val capsule = islandCapsule
-            if (view != null && isAttached && capsule != null) {
+        mainHandler.post {
+            try {
+                val view = overlayView ?: return@post
+                val capsule = islandCapsule ?: return@post
+                if (!isAttached) return@post
+
                 try {
                     TransitionManager.beginDelayedTransition(
                         capsule as ViewGroup,
                         ChangeBounds().apply {
-                            duration = 200
+                            duration = 220
                             interpolator = OvershootInterpolator(0.8f)
                         }
                     )
                 } catch (e: Exception) {
                     Log.w(TAG, "Transition failed: ${e.message}")
                 }
+
+                applyStateVisibilities(newState)
+
+                // Force WindowManager to relayout and expand surface buffer
+                layoutParams?.let { params ->
+                    windowManager?.updateViewLayout(view, params)
+                }
+                view.requestLayout()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in updateState: ${e.message}", e)
             }
-            applyStateVisibilities(newState)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in updateState: ${e.message}", e)
         }
     }
 
@@ -521,7 +568,7 @@ object IslandOverlayManager {
                     compactLeftIcon?.visibility = View.VISIBLE
                     compactLeftText?.visibility = View.GONE
                     centerCutoutSpacer?.visibility = View.VISIBLE
-                    compactRightText?.visibility = View.GONE
+                    compactRightText?.visibility = View.VISIBLE
                     compactEqualizer?.visibility = View.VISIBLE
                 }
                 State.CHARGING_COMPACT -> {

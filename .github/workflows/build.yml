@@ -39,36 +39,32 @@ jobs:
       - name: Prepare APK for Artifact & Release
         run: |
           mkdir -p build-output
-          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.6.apk
+          cp app/build/outputs/apk/release/app-release.apk build-output/Nothing-Island-v1.0.7.apk
           ls -la build-output/
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Nothing-Island-v1.0.6
-          path: build-output/Nothing-Island-v1.0.6.apk
+          name: Nothing-Island-v1.0.7
+          path: build-output/Nothing-Island-v1.0.7.apk
           retention-days: 14
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Nothing Island v1.0.6 (Direct WindowManager Overlay & Force Show Integration)
-          tag_name: v1.0.6
-          files: build-output/Nothing-Island-v1.0.6.apk
+          name: Nothing Island v1.0.7 (Interactive Touch, Attached-to-Top Notch & Lock Screen Overlay)
+          tag_name: v1.0.7
+          files: build-output/Nothing-Island-v1.0.7.apk
           draft: false
           prerelease: false
           body: |
-            ## 🔴 (NOT) ISLAND v1.0.6 // Direct WindowManager Overlay & Instant Punch-Hole Visibility
+            ## 🔴 (NOT) ISLAND v1.0.7 // Interactive Touch, Attached Bezel Style & Lock Screen Support
 
-            This release fixes the Android status-bar cutout clipping issue by restoring `FLAG_LAYOUT_NO_LIMITS` and `FLAG_LAYOUT_IN_SCREEN`, wraps inflation with `ContextThemeWrapper`, prevents double-attach race conditions, and introduces a one-tap `FORCE SHOW ISLAND ON SCREEN` trigger in the app dashboard.
-
-            ### 🚀 Highlights in v1.0.6
-            - **Restored `FLAG_LAYOUT_NO_LIMITS`**: Allows the overlay window to extend directly across the status bar and display cutout without being clipped or hidden by Android OS.
-            - **ContextThemeWrapper**: Ensures view hierarchy inflation receives full theme metrics and dimensions.
-            - **Single-Attach Guard**: Eliminates WindowManager token collisions.
-            - **One-Tap "FORCE SHOW ISLAND ON SCREEN"**: Dedicated dashboard button instantly renders the Dynamic Island on screen with active coordinates.
-            - **Always-On-Screen Standby Mode**: High contrast Nothing pill with crimson dot (`●`) and NDot57 dot-matrix typography.
-            - **Spotify Zero-Crash & Live Real-Time Equalizer**: Real Spotify logo and 4-column dot-matrix visualizer.
+            This major update resolves all user-reported interaction and visual issues:
+            - **Interactive Touch-to-Expand**: Tapping the Dynamic Island instantly expands it with smooth Overshoot animation into the full Nothing OS brutalist media controller card (Previous, Play/Pause, Next).
+            - **iPhone-Style "Attach to Top Bezel" Mode**: New customization switch allows the island to sit completely flush with the phone's top frame (`y = 0` with flat top corners and rounded bottom corners), looking physically integrated with the hardware bezel.
+            - **Lock Screen Support (`FLAG_SHOW_WHEN_LOCKED`)**: The Dynamic Island now stays 100% visible across the Lock Screen and Always-on Display.
+            - **Proper Music Sizing (No Shrinking)**: Playing music now gracefully widens the island to display the official Spotify icon, live track title, and 4-column Nothing Red dot-matrix equalizer.
 
             ### 📦 Direct Download
-            **[Nothing-Island-v1.0.6.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.6/Nothing-Island-v1.0.6.apk)**
+            **[Nothing-Island-v1.0.7.apk](https://github.com/d4rxh/Nothing-Island/releases/download/v1.0.7/Nothing-Island-v1.0.7.apk)**

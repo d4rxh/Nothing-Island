@@ -73,6 +73,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var textCutoutValue: TextView
 
     // Feature switches
+    private lateinit var switchAttachToTop: MaterialSwitch
     private lateinit var switchMusicIsland: MaterialSwitch
     private lateinit var switchChargingIsland: MaterialSwitch
     private lateinit var switchNotificationIsland: MaterialSwitch
@@ -150,6 +151,7 @@ class MainActivity : AppCompatActivity() {
         sliderCutout = findViewById(R.id.sliderCutout)
         textCutoutValue = findViewById(R.id.textCutoutValue)
 
+        switchAttachToTop = findViewById(R.id.switchAttachToTop)
         switchMusicIsland = findViewById(R.id.switchMusicIsland)
         switchChargingIsland = findViewById(R.id.switchChargingIsland)
         switchNotificationIsland = findViewById(R.id.switchNotificationIsland)
@@ -302,6 +304,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Switches
+        switchAttachToTop.setOnCheckedChangeListener { _, isChecked ->
+            prefs.attachToTop = isChecked
+            notifyGeometryUpdate()
+        }
+
         switchMusicIsland.setOnCheckedChangeListener { _, isChecked ->
             prefs.musicIslandEnabled = isChecked
         }
@@ -418,6 +425,7 @@ class MainActivity : AppCompatActivity() {
         sliderCutout.value = prefs.cutoutSize.toFloat().coerceIn(16f, 44f)
         textCutoutValue.text = "${prefs.cutoutSize} dp"
 
+        switchAttachToTop.isChecked = prefs.attachToTop
         switchMusicIsland.isChecked = prefs.musicIslandEnabled
         switchChargingIsland.isChecked = prefs.chargingIslandEnabled
         switchNotificationIsland.isChecked = prefs.notificationIslandEnabled

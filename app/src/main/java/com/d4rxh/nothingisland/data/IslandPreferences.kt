@@ -61,6 +61,10 @@ class IslandPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_HAPTICS_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_HAPTICS_ENABLED, value).apply()
 
+    var attachToTop: Boolean
+        get() = prefs.getBoolean(KEY_ATTACH_TO_TOP, false)
+        set(value) = prefs.edit().putBoolean(KEY_ATTACH_TO_TOP, value).apply()
+
     companion object {
         private const val KEY_ISLAND_ENABLED = "pref_island_enabled"
         private const val KEY_X_OFFSET = "pref_x_offset"
@@ -73,5 +77,6 @@ class IslandPreferences(context: Context) {
         private const val KEY_CHARGING_ENABLED = "pref_charging_enabled"
         private const val KEY_NOTIFICATION_ENABLED = "pref_notification_enabled"
         private const val KEY_HAPTICS_ENABLED = "pref_haptics_enabled"
+        private const val KEY_ATTACH_TO_TOP = "pref_attach_to_top"
     }
 }
