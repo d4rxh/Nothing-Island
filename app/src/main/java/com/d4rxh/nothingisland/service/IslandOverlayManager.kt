@@ -2016,6 +2016,8 @@ object IslandOverlayManager {
 
         mainHandler.post {
             try {
+                val context = appContext ?: return@post
+                val prefs = IslandPreferences(context)
                 val view = overlayView ?: return@post
                 val capsule = islandCapsule ?: return@post
                 if (!isAttached) return@post
