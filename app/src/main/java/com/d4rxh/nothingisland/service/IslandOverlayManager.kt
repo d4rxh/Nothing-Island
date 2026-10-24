@@ -315,7 +315,7 @@ object IslandOverlayManager {
         }
 
         islandRoot?.onIslandCollapse = {
-            if (prefs.hapticsEnabled) NothingHapticHelper.vibrateTick(context)
+            if (prefs.hapticsEnabled) NothingHapticHelper.vibratePop(context)
             collapseIsland()
         }
 

@@ -1,5 +1,6 @@
 package com.d4rxh.nothingisland
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
